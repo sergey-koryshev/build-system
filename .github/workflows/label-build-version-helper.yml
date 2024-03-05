@@ -19,4 +19,4 @@ jobs:
     with:
       app-name: version-helper
       root-path: scripts/ps/VersionHelper
-      version-configuration-path: scripts/ps
+      version-configuration-path: scripts/ps/version-configuration.json

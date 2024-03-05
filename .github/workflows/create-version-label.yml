@@ -46,7 +46,7 @@ jobs:
             throw "Repository name cannot be parsed: ${{ github.repository }}"
           }
 
-          $newVersion = Submit-NewVersionLabel -ProjectType Node -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ inputs.version-configuration-path }}" "version-configuration.json") -AuthToken ${{ secrets.GITHUB_TOKEN }}
+          $newVersion = Submit-NewVersionLabel -ProjectType Node -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }}
           "new-version=$newVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Commit New Version
         run: |

@@ -1,18 +1,18 @@
-name: Validation Build for Version Helper
+name: Validation Build for PowerShell scripts
 
 on:
   pull_request:
     branches:
       - master
     paths:
-      - 'scripts/ps/VersionHelper/**'
+      - 'scripts/ps/**'
 
 jobs:
   label_check:
     name: PullRequest Label Checker
     uses: ./.github/workflows/pr-label-checker.yml
     with:
-      version-configuration-path: scripts/ps
+      version-configuration-path: scripts/ps/version-configuration.json
   pester_tests:
     name: Pester Tests
     uses: ./.github/workflows/pester-tests.yml
