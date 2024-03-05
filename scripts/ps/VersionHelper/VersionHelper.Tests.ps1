@@ -39,7 +39,7 @@ Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
       ($actual | ConvertTo-Json) | Should -Be ($expected | ConvertTo-Json)
     }
 
-    It "Should return exception if configuration contains unsupported version parts" {
+    It "Should return exception if configuration contains unsupported parts" {
       Mock -CommandName Get-Content -MockWith {
         @{
           "bug"           = @("Patch", "Unsupported1")
@@ -48,10 +48,10 @@ Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
         } | ConvertTo-Json
       } -ModuleName VersionHelper
 
-      { Get-VersionConfiguration -Path $fakePath } | Should -Throw "Unsupported version parts detected in configuration: Unsupported1, Unsupported2. Only follow values are supported: Major, Minor, Patch, Revision"
+      { Get-VersionConfiguration -Path $fakePath } | Should -Throw "Unsupported parts detected in configuration: Unsupported1, Unsupported2. Only follow values are supported: Major, Minor, Patch, Revision"
     }
 
-    It "Should return excpetion if configuration contains duplicated version parts" {
+    It "Should return excpetion if configuration contains duplicated parts to increment" {
       Mock -CommandName Get-Content -MockWith {
         @{
           "bug"           = @("Patch", "Patch")
@@ -60,7 +60,7 @@ Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
         } | ConvertTo-Json
       } -ModuleName VersionHelper
 
-      { Get-VersionConfiguration -Path $fakePath } | Should -Throw "Label can't contain duplicated version parts to increment. Affected labels: bug, enhancement"
+      { Get-VersionConfiguration -Path $fakePath } | Should -Throw "Label can't contain duplicated parts to increment. Affected labels: bug, enhancement"
     }
 
     It "Should return configuration from specified file" {
