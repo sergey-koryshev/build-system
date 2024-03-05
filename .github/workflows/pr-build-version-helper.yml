@@ -10,7 +10,7 @@ on:
 jobs:
   label_check:
     name: PullRequest Label Checker
-    uses: ./workflows/pr-label-checker.yml
+    uses: ./workflows/pr-label-checker.yml@master
     with:
       version-configuration-path: scripts/ps
   pester_tests:
