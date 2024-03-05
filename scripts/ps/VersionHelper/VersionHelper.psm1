@@ -21,7 +21,7 @@ enum ProjectType {
 
 <#
 .SYNOPSIS
-  Reads and validates version configuration from specified file and returs it.
+  Reads and validates version configuration from specified file and returns it.
 .EXAMPLE
   Get-VersionConfiguration -Path "C:\version-configuration.json"
 .OUTPUTS
@@ -89,9 +89,9 @@ function Get-VersionConfiguration {
 .SYNOPSIS
   Returns incrementing parts of version based on labels in related PR.
 .NOTES
-  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonimously. It applies some limitations:
+  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonymously. It applies some limitations:
   - you cannot use this method to work with private repositories;
-  - GitHub has some quota for anonimous API requests, so such requests will be rejected.
+  - GitHub has some quota for anonymous API requests, so such requests will be rejected.
 .EXAMPLE
   Get-IncrementingParts -PullRequestId 108 -Owner "Alex" -Repository "WarfaceAim" -VersionConfigurationPath "C:\version-configuration.json"
   Get-IncrementingParts -PullRequestId 108 -Owner "Alex" -Repository "WarfaceAim" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
@@ -167,9 +167,9 @@ function Get-IncrementingParts {
 .SYNOPSIS
   Returns array of Pull Requests numbers linked to specified SHA.
 .NOTES
-  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonimously. It applies some limitations:
+  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonymously. It applies some limitations:
   - you cannot use this method to work with private repositories;
-  - GitHub has some quota for anonimous API requests, so such requests will be rejected.
+  - GitHub has some quota for anonymous API requests, so such requests will be rejected.
 .EXAMPLE
   Get-PullRequestNumbers -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" 
   Get-PullRequestNumbers -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -AuthToken "abcdef..."
@@ -208,7 +208,7 @@ function Get-PullRequestNumbers {
       $headers["Authorization"] = "Bearer $AuthToken"
     }
 
-    Write-Host "Getting all relatd PRs for SHA '$SHA'"
+    Write-Host "Getting all related PRs for SHA '$SHA'"
     $prs = Invoke-RestMethod -Method Get -Uri ($getLabelsUrl -f $Owner, $Repository, $SHA) -Headers $headers
 
     Write-Host "Found '$($prs.Length)' PRs"
@@ -276,11 +276,11 @@ function Get-Version {
 .SYNOPSIS
   Increments the version for specified project type and saves it.
 .NOTES
-  Please be aware of following incrementation logic implemented:
+  Please be aware of following logic implemented:
   - incrementing major part zeroes following parts of the version: minor and patch;
   - incrementing minor part zeroes patch part of the version.
   If suffix is not specified then it doesn't mean the existing suffix will be removed.
-  To remive existing suffix you need to pass [string]::Empty to parameter Suffix.
+  To remove existing suffix you need to pass [string]::Empty to parameter Suffix.
 .EXAMPLE
   Set-IncrementedVersion -ProjectType Node -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Node -IncrementPatch -Suffix "-RC1"
@@ -295,19 +295,19 @@ function Set-IncrementedVersion {
     $ProjectType,
 
     [switch]
-    # (Optional) Idicates whether the major part of version must be incremented.
+    # (Optional) Indicates whether the major part of version must be incremented.
     $IncrementMajor,
 
     [switch]
-    # (Optional) Idicates whether the minor part of version must be incremented.
+    # (Optional) Indicates whether the minor part of version must be incremented.
     $IncrementMinor,
 
     [switch]
-    # (Optional) Idicates whether the patch part of version must be incremented.
+    # (Optional) Indicates whether the patch part of version must be incremented.
     $IncrementPatch,
 
     [switch]
-    # (Optional) Idicates whether the revision part of version must be incremented.
+    # (Optional) Indicates whether the revision part of version must be incremented.
     $IncrementRevision,
 
     [string]
@@ -397,11 +397,11 @@ function Set-IncrementedVersion {
 <#
 .SYNOPSIS
   Reads the existing version for specified project type, increments accordingly and saves it.
-  This is the main function of incrementation logic.
+  This is the main function of incrementing logic.
 .NOTES
-  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonimously. It applies some limitations:
+  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonymously. It applies some limitations:
   - you cannot use this method to work with private repositories;
-  - GitHub has some quota for anonimous API requests, so such requests will be rejected.
+  - GitHub has some quota for anonymous API requests, so such requests will be rejected.
 .EXAMPLE
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json"
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
