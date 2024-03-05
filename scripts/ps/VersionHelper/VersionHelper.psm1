@@ -1,5 +1,9 @@
 $Script:Config = . { [CmdletBinding()] param() return $MyInvocation.MyCommand.Module.PrivateData.Settings }
 
+<#
+.SYNOPSIS
+  List of supported parts of version to increment.
+#>
 enum VersionPart {
   Major
   Minor
@@ -7,14 +11,27 @@ enum VersionPart {
   Revision
 }
 
+<#
+.SYNOPSIS
+  List of supported types of projects.
+#>
 enum ProjectType {
   Node
 }
 
+<#
+.SYNOPSIS
+  Reads and validates version configuration from specified file and returns it.
+.EXAMPLE
+  Get-VersionConfiguration -Path "C:\version-configuration.json"
+.OUTPUTS
+  Returns hashtable where key is a PR label and value is an array of parts need to be incremented in version.
+#>
 function Get-VersionConfiguration {
   [CmdletBinding()]
   param(
     [string]
+    # Specifies the path to version configuration file.
     $Path
   )
 
@@ -51,13 +68,13 @@ function Get-VersionConfiguration {
     $unsupportedValues = $allValues | ForEach-Object { $_ } | Where-Object { $supportedValues -notcontains $_ } | Sort-Object -Unique
 
     if ($unsupportedValues.Length -gt 0) {
-      throw "Unsupported version parts detected in configuration: $($unsupportedValues -join ', '). Only follow values are supported: $($supportedValues -join ', ')"
+      throw "Unsupported parts detected in configuration: $($unsupportedValues -join ', '). Only follow values are supported: $($supportedValues -join ', ')"
     }
 
     $labelsWithDuplicatedValues = $configuration.GetEnumerator() | Where-Object { ($_.Value | Group-Object | Where-Object { $_.Count -gt 1 }).Count -gt 0 }
 
     if ($labelsWithDuplicatedValues.Length -gt 0) {
-      throw "Label can't contain duplicated version parts to increment. Affected labels: $(($labelsWithDuplicatedValues.Key | Sort-Object) -join ', ')"
+      throw "Label can't contain duplicated parts to increment. Affected labels: $(($labelsWithDuplicatedValues.Key | Sort-Object) -join ', ')"
     }
 
     Write-Output $configuration
@@ -68,22 +85,40 @@ function Get-VersionConfiguration {
   }
 }
 
-function Get-IncrementingVersionParts {
+<#
+.SYNOPSIS
+  Returns incrementing parts of version based on labels in related PR.
+.NOTES
+  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonymously. It applies some limitations:
+  - you cannot use this method to work with private repositories;
+  - GitHub has some quota for anonymous API requests, so such requests will be rejected.
+.EXAMPLE
+  Get-IncrementingParts -PullRequestId 108 -Owner "Alex" -Repository "WarfaceAim" -VersionConfigurationPath "C:\version-configuration.json"
+  Get-IncrementingParts -PullRequestId 108 -Owner "Alex" -Repository "WarfaceAim" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+.OUTPUTS
+  Returns array of version parts need to be incremented.
+#>
+function Get-IncrementingParts {
   [CmdletBinding()]
   param(
     [int]
+    # Specifies the id of pull request.
     $PullRequestId,
     
     [string]
+    # Specifies the owner of repository the pull request was open against.
     $Owner,
     
     [string]
+    # Specifies the repository name the pull request was open against.
     $Repository,
 
     [string]
+    # Specifies the path to version configuration file.
     $VersionConfigurationPath,
 
     [string]
+    # (Optional) Specifies the authentication token to invoke GitHub API.
     $AuthToken
   )
 
@@ -128,19 +163,36 @@ function Get-IncrementingVersionParts {
   }
 }
 
+<#
+.SYNOPSIS
+  Returns array of Pull Requests numbers linked to specified SHA.
+.NOTES
+  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonymously. It applies some limitations:
+  - you cannot use this method to work with private repositories;
+  - GitHub has some quota for anonymous API requests, so such requests will be rejected.
+.EXAMPLE
+  Get-PullRequestNumbers -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" 
+  Get-PullRequestNumbers -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -AuthToken "abcdef..."
+.OUTPUTS
+  Returns array of version parts need to be incremented.
+#>
 function Get-PullRequestNumbers {
   [CmdletBinding()]
   param(
     [string]
+    # Specifies the SHA the pull request numbers are needed to be found for.
     $SHA,
       
     [string]
+    # Specifies the owner of repository the SHA was submitted to.
     $Owner,
       
     [string]
+    # Specifies the repository name the SHA was submitted to.
     $Repository,
 
     [string]
+    # (Optional) Specifies the authentication token to invoke GitHub API.
     $AuthToken
   )
 
@@ -156,7 +208,7 @@ function Get-PullRequestNumbers {
       $headers["Authorization"] = "Bearer $AuthToken"
     }
 
-    Write-Host "Getting all relatd PRs for SHA '$SHA'"
+    Write-Host "Getting all related PRs for SHA '$SHA'"
     $prs = Invoke-RestMethod -Method Get -Uri ($getLabelsUrl -f $Owner, $Repository, $SHA) -Headers $headers
 
     Write-Host "Found '$($prs.Length)' PRs"
@@ -169,10 +221,19 @@ function Get-PullRequestNumbers {
   }
 }
 
+<#
+.SYNOPSIS
+  Returns version for specified project type.
+.EXAMPLE
+  Get-Version -ProjectType Node
+.OUTPUTS
+  Returns string version.
+#>
 function Get-Version {
   [CmdletBinding()]
   param(
     [ProjectType]
+    # Specified the type of project.
     $ProjectType
   )
 
@@ -198,10 +259,6 @@ function Get-Version {
         }
       }
 
-      ([ProjectType]::Posh) {
-        
-      }
-
       Default {
         throw "Project type '$ProjectType' is unsupported"
       }
@@ -215,25 +272,46 @@ function Get-Version {
   }
 }
 
-function Set-Version {
+<#
+.SYNOPSIS
+  Increments the version for specified project type and saves it.
+.NOTES
+  Please be aware of following logic implemented:
+  - incrementing major part zeroes following parts of the version: minor and patch;
+  - incrementing minor part zeroes patch part of the version.
+  If suffix is not specified then it doesn't mean the existing suffix will be removed.
+  To remove existing suffix you need to pass [string]::Empty to parameter Suffix.
+.EXAMPLE
+  Set-IncrementedVersion -ProjectType Node -IncrementMajor -IncrementRevision
+  Set-IncrementedVersion -ProjectType Node -IncrementPatch -Suffix "-RC1"
+.OUTPUTS
+  Returns incremented string version.
+#>
+function Set-IncrementedVersion {
   [CmdletBinding()]
   param(
     [ProjectType]
+    # Specifies the type of project.
     $ProjectType,
 
     [switch]
+    # (Optional) Indicates whether the major part of version must be incremented.
     $IncrementMajor,
 
     [switch]
+    # (Optional) Indicates whether the minor part of version must be incremented.
     $IncrementMinor,
 
     [switch]
+    # (Optional) Indicates whether the patch part of version must be incremented.
     $IncrementPatch,
 
     [switch]
+    # (Optional) Indicates whether the revision part of version must be incremented.
     $IncrementRevision,
 
     [string]
+    # (Optional) Specified the suffix to be added to the incremented version.
     $Suffix
   )
 
@@ -316,28 +394,50 @@ function Set-Version {
   }
 }
 
+<#
+.SYNOPSIS
+  Reads the existing version for specified project type, increments accordingly and saves it.
+  This is the main function of incrementing logic.
+.NOTES
+  If parameter AuthToken is not specified then all API requests will be sent to GitHub anonymously. It applies some limitations:
+  - you cannot use this method to work with private repositories;
+  - GitHub has some quota for anonymous API requests, so such requests will be rejected.
+.EXAMPLE
+  Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json"
+  Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+.OUTPUTS
+  Returns incremented string version.
+#>
 function Submit-NewVersionLabel {
   [CmdletBinding()]
   param (
     [ProjectType]
+    # Specifies the type of project.
     $ProjectType,
 
     [string]
+    # Specifies the SHA the pull request numbers are needed to be found for.
     $SHA,
     
     [string]
+    # Specifies the owner of repository the SHA was submitted to.
     $Owner,
     
     [string]
+    # Specifies the repository name the SHA was submitted to.
     $Repository,
 
     [VersionPart]
+    # (Optional) Specifies the default incrementing part.
+    # It's used in case there are no related pull requests for specified SHA.
     $DefaultIncrementingPart,
 
     [string]
+    # Specifies the path to version configuration file.
     $VersionConfigurationPath,
 
     [string]
+    # (Optional) Specifies the authentication token to invoke GitHub API.
     $AuthToken
   )
   
@@ -359,20 +459,20 @@ function Submit-NewVersionLabel {
       }
     }
 
-    $setVersionParams = @{
+    $setIncrementedVersionParams = @{
       ProjectType = $ProjectType
     }
 
     if ($relatedPRs.Length -eq 0) {
-      $setVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($DefaultIncrementingPart))"] = $true;
+      $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($DefaultIncrementingPart))"] = $true;
     }
     else {
-      Get-IncrementingVersionParts -PullRequestId $relatedPRs[0] -Owner $Owner -Repository $Repository -VersionConfigurationPath $VersionConfigurationPath -AuthToken $AuthToken | ForEach-Object {
-        $setVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($_))"] = $true;
+      Get-IncrementingParts -PullRequestId $relatedPRs[0] -Owner $Owner -Repository $Repository -VersionConfigurationPath $VersionConfigurationPath -AuthToken $AuthToken | ForEach-Object {
+        $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($_))"] = $true;
       } | Out-Null
     }
 
-    $newVersion = Set-Version @setVersionParams
+    $newVersion = Set-IncrementedVersion @setIncrementedVersionParams
 
     Write-Output $newVersion
   }
