@@ -9,7 +9,7 @@ on:
 
 jobs:
   label_check:
-    name: PullRequest Label Checker
+    name: Pull Request Label Checker
     uses: ./.github/workflows/pr-label-checker.yml
     with:
       version-configuration-path: scripts/ps/version-configuration.json
