@@ -1,4 +1,4 @@
-name: PullRequest Label Checker
+name: Pull Request Label Checker
 
 on:
   workflow_call:
