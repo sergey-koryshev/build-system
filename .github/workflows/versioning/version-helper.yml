@@ -1,0 +1,22 @@
+name: Create Version Label for VersionHelper.psm1
+
+concurrency: versioning
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'scripts/ps/VersionHelper/**'
+
+jobs:
+  create_label:
+    name: Create Version Label
+    uses: ./workflows/create-version-label.yml
+    secrets:
+      REPO_TOKEN: ${{ secrets.REPO_PAT }}
+    with:
+      app-name: version-helper
+      root-path: scripts/ps/VersionHelper
+      version-configuration-path: scripts/ps

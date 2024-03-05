@@ -1,0 +1,59 @@
+name: Create Version Label
+
+on:
+  workflow_call:
+    secrets:
+      REPO_TOKEN:
+        description: 'Token to access to repository'
+        required: true
+    inputs:
+      app-name:
+        required: true
+        type: string
+      skip-tag:
+        required: false
+        default: false
+        type: boolean
+      root-path:
+        required: false
+        type: string
+        default: .
+      version-configuration-path:
+        required: false
+        type: string
+        default: .
+
+jobs:
+  create_label:
+    name: Create Version Label
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.root-path }}
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout repository
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
+      - name: Set New Version
+        shell: pwsh
+        run: |
+          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build/scripts")"
+          Import-Module VersionHelper.psd1 -Force -Verbose
+          $splitRepositoryName = "${{ github.repository }}" -split "/"
+
+          if ($splitRepositoryName.Length -ne 2) {
+            throw "Repository name cannot be parsed: ${{ github.repository }}"
+          }
+
+          $newVersion = Submit-NewVersionLabel -ProjectType Node -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ inputs.version-configuration-path }}" "version-configuration.json") -AuthToken ${{ secrets.GITHUB_TOKEN }}
+          "new-version=$newVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Commit New Version
+        run: |
+          git config --global user.name "$env:GITHUB_ACTOR"
+          git config --global user.email "$env:GITHUB_ACTOR@users.noreply.github.com"
+          git pull
+          git commit -am "[automated] Bumped ${{ inputs.app-name }} version to ${{ env.new-version }} [skip ci]"
+          if ("${{ inputs.skip-tag }}" -eq "false") { git tag v${{ env.new-version }} }
+          git push
+          git push --tags

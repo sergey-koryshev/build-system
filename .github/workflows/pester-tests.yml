@@ -1,0 +1,37 @@
+name: Pester Tests
+
+on:
+  workflow_call:
+    inputs:
+      root-path:
+        required: false
+        type: string
+        default: .
+
+jobs:
+  build:
+    name: Pester Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js 16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+      - name: Run Pester tests for all scripts in ${{ inputs.root-path }}
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -RequiredVersion 5.5.0 -Scope CurrentUser -Force
+          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "${{ inputs.root-path }}")"
+          $pesterConfiguration = New-PesterConfiguration
+          $pesterConfiguration.Run.Path = Join-Path "${{ github.workspace }}" "${{ inputs.root-path }}"
+          $pesterConfiguration.Output.Verbosity = "Detailed"
+          $pesterConfiguration.TestResult.Enabled = $true
+          $pesterConfiguration.TestResult.OutputPath = (Join-Path "${{ github.workspace }}" "tests/test-result.xml")
+          Invoke-Pester -Configuration $pesterConfiguration
+      - name: Publish Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: 'pester-test-result'
+          path: 'tests/test-result.xml'
