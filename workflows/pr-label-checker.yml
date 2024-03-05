@@ -1,0 +1,30 @@
+name: PullRequest Label Checker
+
+on:
+  workflow_call:
+    inputs:
+      version-configuration-path:
+        required: false
+        type: string
+        default: .
+
+jobs:
+  label_checker:
+    name: Version Increment Checker
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout repository
+      - name: Get increment information based on labels in PR
+        shell: pwsh
+        run: |
+          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build/scripts")"
+          Import-Module VersionHelper.psd1 -Force -Verbose
+          $splitRepositoryName = "${{ github.repository }}" -split "/"
+          
+          if ($splitRepositoryName.Length -ne 2) {
+            throw "Repository name cannot be parsed: ${{ github.repository }}"
+          }
+
+          $incrementingPart = Get-IncrementingVersionParts -PullRequestId ${{ github.event.pull_request.number }} -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ inputs.version-configuration-path }}" "version-configuration.json") -AuthToken ${{ secrets.GITHUB_TOKEN }}
+          Write-Host "Found incrementing parts: $($incrementingPart -join ', ')"
