@@ -15,6 +15,6 @@ jobs:
       version-configuration-path: scripts/ps
   pester_tests:
     name: Pester Tests
-    uses: ./github/pester-tests.yml
+    uses: ./github/workflows/shared/pester-tests.yml
     with:
       root-path: scripts/ps
