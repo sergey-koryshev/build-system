@@ -26,5 +26,5 @@ jobs:
             throw "Repository name cannot be parsed: ${{ github.repository }}"
           }
 
-          $incrementingPart = Get-IncrementingVersionParts -PullRequestId ${{ github.event.pull_request.number }} -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }}
+          $incrementingPart = Get-IncrementingParts -PullRequestId ${{ github.event.pull_request.number }} -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }}
           Write-Host "Found incrementing parts: $($incrementingPart -join ', ')"
