@@ -43,8 +43,8 @@ jobs:
       - name: Set New Version
         shell: pwsh
         run: |
-          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build/scripts")"
-          Import-Module VersionHelper.psd1 -Force -Verbose
+          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "scripts/ps")"
+          Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
 
           if ($splitRepositoryName.Length -ne 2) {
