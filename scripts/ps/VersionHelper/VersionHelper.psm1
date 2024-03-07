@@ -17,6 +17,7 @@ enum VersionPart {
 #>
 enum ProjectType {
   Node
+  Posh
 }
 
 <#
@@ -226,6 +227,8 @@ function Get-PullRequestNumbers {
   Returns version for specified project type.
 .EXAMPLE
   Get-Version -ProjectType Node
+  Get-Version -ProjectType Posh -PowerShellModuleName MyModule
+  Get-Version -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1
 .OUTPUTS
   Returns string version.
 #>
@@ -234,7 +237,11 @@ function Get-Version {
   param(
     [ProjectType]
     # Specified the type of project.
-    $ProjectType
+    $ProjectType,
+
+    [string]
+    # Specified the PowerShell module name.
+    $PowerShellModuleName
   )
 
   begin {
@@ -256,6 +263,30 @@ function Get-Version {
 
         if ([string]::IsNullOrWhiteSpace($version) -or $version -eq "{}") {
           throw "Version doesn't exist in 'package.json'"
+        }
+      }
+
+      ([ProjectType]::Posh) {
+        if ([string]::IsNullOrWhiteSpace($PowerShellModuleName)) {
+          throw "Parameter 'PowerShellModuleName' is not specified"
+        }
+
+        $psModule = Get-Module -Name $PowerShellModuleName -ListAvailable
+
+        if ($psModule.Length -eq 0) {
+          throw "There is no module with name '$($PowerShellModuleName)'"
+        }
+
+        if ($psModule.Length -gt 1) {
+          throw "There are $($psModule.Count) modules with name '$($PowerShellModuleName)'"
+        }
+
+        Write-Host "Getting version from manifest of module '$($PowerShellModuleName)'"
+
+        $version = $psModule.Version.ToString()
+
+        if ([string]::IsNullOrWhiteSpace($version)) {
+          throw "Version doesn't exist in manifest of module '$($PowerShellModuleName)'"
         }
       }
 
@@ -284,6 +315,9 @@ function Get-Version {
 .EXAMPLE
   Set-IncrementedVersion -ProjectType Node -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Node -IncrementPatch -Suffix "-RC1"
+  Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName MyModule -IncrementMajor -IncrementRevision
+  Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -IncrementPatch -Suffix "-RC1"
+
 .OUTPUTS
   Returns incremented string version.
 #>
@@ -293,6 +327,10 @@ function Set-IncrementedVersion {
     [ProjectType]
     # Specifies the type of project.
     $ProjectType,
+
+    [string]
+    # Specified the PowerShell module name.
+    $PowerShellModuleName,
 
     [switch]
     # (Optional) Indicates whether the major part of version must be incremented.
@@ -321,7 +359,7 @@ function Set-IncrementedVersion {
   }
 
   process {
-    $currentVersion = Get-Version -ProjectType $ProjectType
+    $currentVersion = Get-Version -ProjectType $ProjectType -PowerShellModuleName $PowerShellModuleName
 
     $newVersion = [string]::Empty
 
@@ -374,11 +412,48 @@ function Set-IncrementedVersion {
       ([ProjectType]::Node) {
         Write-Host "Saving new version in 'package.json'"
 
-          (& npm version --no-commit-hooks --no-git-tag-version $newVersion) | Out-Null
+        (& npm version --no-commit-hooks --no-git-tag-version $newVersion) | Out-Null
 
         if ($LASTEXITCODE -ne 0) {
           throw "Something went wrong while saving new version in 'package.json'"
         }
+      }
+
+      ([ProjectType]::Posh) {
+        if ([string]::IsNullOrWhiteSpace($PowerShellModuleName)) {
+          throw "Parameter 'PowerShellModuleName' is not specified"
+        }
+
+        $psModule = Get-Module -Name $PowerShellModuleName -ListAvailable
+
+        if ($psModule.Length -eq 0) {
+          throw "There is no module with name '$($PowerShellModuleName)'"
+        }
+
+        if ($psModule.Length -gt 1) {
+          throw "There are $($psModule.Count) modules with name '$($PowerShellModuleName)'"
+        }
+
+        Write-Host "Saving new version in manifest of module '$($PowerShellModuleName)'"
+
+        $lineToModifyRegex = "^\s*ModuleVersion\s*=\s*('|"")$currentVersion('|"")\s*$"
+        $found = $false
+
+        (Get-Content -Path $psModule.Path | 
+          Foreach-Object { 
+            if ($found -eq $false -and $_ -match $lineToModifyRegex) {
+              $found = $true
+              Write-Output ($_ -replace ([Regex]::Escape($currentVersion)), $newVersion)
+            } else {
+              Write-Output $_
+            }
+          }) | Set-Content $psModule.Path -Force
+
+        if ($found -eq $false) {
+          throw "Version related line was not found in file $($psModule.Path)"
+        }
+
+        Test-ModuleManifest -Path $psModule.Path -ErrorAction Stop | Out-Null
       }
   
       Default {
@@ -405,6 +480,8 @@ function Set-IncrementedVersion {
 .EXAMPLE
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json"
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName MyModule -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
 .OUTPUTS
   Returns incremented string version.
 #>
@@ -414,6 +491,10 @@ function Submit-NewVersionLabel {
     [ProjectType]
     # Specifies the type of project.
     $ProjectType,
+
+    [string]
+    # Specified the PowerShell module name.
+    $PowerShellModuleName,
 
     [string]
     # Specifies the SHA the pull request numbers are needed to be found for.
@@ -461,6 +542,7 @@ function Submit-NewVersionLabel {
 
     $setIncrementedVersionParams = @{
       ProjectType = $ProjectType
+      PowerShellModuleName = $PowerShellModuleName
     }
 
     if ($relatedPRs.Length -eq 0) {

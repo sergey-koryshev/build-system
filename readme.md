@@ -29,9 +29,11 @@ v1.0.1
 
 - **REPO_TOKEN** - (secret) token with write permissions to repository;
 - **app-name** - project name;
+- **project-type** - project type: Node, Posh;
+- **version-configuration-path** - full path to version configuration.
+- **posh-module-name** - name of powershell module, needs to be specified in case of project type `Posh`;
 - **skip-tag** - indicates if wether the workflow will create tag or not;
 - **root-path** - root path of target project;
-- **version-configuration-path** - path to version configuration.
 
 ### Pull Request Label Checker
 
