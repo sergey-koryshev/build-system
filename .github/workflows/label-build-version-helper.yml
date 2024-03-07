@@ -22,3 +22,4 @@ jobs:
       posh-module-name: VersionHelper
       root-path: scripts/ps/VersionHelper
       version-configuration-path: scripts/ps/version-configuration.json
+      skip-tag: true
