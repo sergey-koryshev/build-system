@@ -18,5 +18,7 @@ jobs:
       REPO_TOKEN: ${{ secrets.REPO_PAT }}
     with:
       app-name: version-helper
+      project-type: Node
+      posh-module-name: VersionHelper
       root-path: scripts/ps/VersionHelper
       version-configuration-path: scripts/ps/version-configuration.json
