@@ -25,6 +25,7 @@ jobs:
         run: |
           dir "${{ github.workspace }}"
           dir "${{ github.workspace }}\.."
+          dir "D:\a\build-system\build-system\build-system-repo"
           $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "../build-system-repo" "scripts/ps")"
           Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
