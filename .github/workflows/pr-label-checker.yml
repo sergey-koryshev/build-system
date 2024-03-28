@@ -13,13 +13,13 @@ jobs:
     name: Version Increment Checker
     runs-on: windows-latest
     steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v3
       - name: Checkout build-system repository
         uses: actions/checkout@v3
         with:
           repository: sergey-koryshev/build-system
           path: build-system-repo
-      - name: Checkout target repository
-        uses: actions/checkout@v3
       - name: Get increment information based on labels in PR
         shell: pwsh
         run: |
