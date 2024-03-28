@@ -23,8 +23,7 @@ jobs:
       - name: Get increment information based on labels in PR
         shell: pwsh
         run: |
-          Write-Host $env:GITHUB_WORKFLOW_SHA
-          Write-Host $env:GITHUB_WORKFLOW_REF
+          dir env:
           $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
           Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
