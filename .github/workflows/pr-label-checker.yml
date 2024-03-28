@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
-          Import-Module VersionHelper.psd1 -Force -Verbose
+          Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
           
           if ($splitRepositoryName.Length -ne 2) {
