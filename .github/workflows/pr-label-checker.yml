@@ -13,12 +13,17 @@ jobs:
     name: Version Increment Checker
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
-        name: Checkout repository
+      - name: Checkout build-system repository
+        uses: actions/checkout@v3
+        with:
+          repository: sergey-koryshev/build-system
+          path: build-system-repo
+      - name: Checkout target repository
+        uses: actions/checkout@v3
       - name: Get increment information based on labels in PR
         shell: pwsh
         run: |
-          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "scripts/ps")"
+          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
           Import-Module VersionHelper.psd1 -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
           
