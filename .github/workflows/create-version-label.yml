@@ -36,15 +36,15 @@ jobs:
       run:
         working-directory: ${{ inputs.root-path }}
     steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
       - name: Checkout build-system repository
         uses: actions/checkout@v3
         with:
           repository: sergey-koryshev/build-system
           path: build-system-repo
-      - name: Checkout target repository
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.REPO_TOKEN }}
       - name: Set New Version
         shell: pwsh
         run: |
@@ -63,6 +63,7 @@ jobs:
           git config --global user.name "$env:GITHUB_ACTOR"
           git config --global user.email "$env:GITHUB_ACTOR@users.noreply.github.com"
           git pull
+          git status
           git commit -am "[automated] Bumped ${{ inputs.app-name }} version to ${{ env.new-version }} [skip ci]"
           if ("${{ inputs.skip-tag }}" -eq "false") { git tag ${{ inputs.app-name }}-v${{ env.new-version }} }
           git push
