@@ -7,6 +7,11 @@ on:
         required: false
         type: string
         default: .
+      # https://github.com/orgs/community/discussions/114697
+      scripts-ref:
+        required: false
+        type: string
+        default: master
 
 jobs:
   label_checker:
@@ -16,15 +21,21 @@ jobs:
       - name: Checkout target repository
         uses: actions/checkout@v3
       - name: Checkout build-system repository
+        if: ${{ github.repository != 'sergey-koryshev/build-system' }}
         uses: actions/checkout@v3
         with:
           repository: sergey-koryshev/build-system
           path: build-system-repo
+          ref: ${{ inputs.scripts-ref }}
       - name: Get increment information based on labels in PR
         shell: pwsh
         run: |
-          dir env:
-          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
+          if ("${{ github.workspace }}" -eq "sergey-koryshev/build-system") {
+            $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "scripts/ps")"
+          } else {
+            $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
+          }
+          
           Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
           
