@@ -30,12 +30,12 @@ jobs:
       - name: Get increment information based on labels in PR
         shell: pwsh
         run: |
-          if ("${{ github.workspace }}" -eq "sergey-koryshev/build-system") {
+          if ("${{ github.repository }}" -eq "sergey-koryshev/build-system") {
             $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "scripts/ps")"
           } else {
             $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
           }
-          
+
           Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
           
