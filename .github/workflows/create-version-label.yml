@@ -77,7 +77,7 @@ jobs:
             AuthToken = ${{ secrets.GITHUB_TOKEN }}
           }
 
-          if ([string]::IsNullOrWhiteSpace("${{ inputs.posh-module-name }}") -eq $false)
+          if ("${{ inputs.project-type }}" -eq "Posh")
           {
             $newVersionLabelParams["PowerShellModuleName"] = ${{ inputs.posh-module-name }}
           }
