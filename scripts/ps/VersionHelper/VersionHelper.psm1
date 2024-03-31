@@ -484,7 +484,6 @@ function Set-IncrementedVersion {
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
 .OUTPUTS
   Returns incremented string version.
-  Dummy change
 #>
 function Submit-NewVersionLabel {
   [CmdletBinding()]
