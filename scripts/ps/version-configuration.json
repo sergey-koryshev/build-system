@@ -1,7 +1,7 @@
 {
-  "bug": ["patch"],
-  "enhancement": ["minor"],
-  "misc": ["patch"],
   "breaking changes": ["major"],
-  "minor enhancement": ["patch"]
+  "enhancement": ["minor"],
+  "minor enhancement": ["patch"],
+  "bug": ["patch"],
+  "misc": ["patch"]
 }

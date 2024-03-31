@@ -34,6 +34,7 @@ v1.0.1
 - **posh-module-name** - name of powershell module, needs to be specified in case of project type `Posh`;
 - **skip-tag** - indicates if wether the workflow will create tag or not;
 - **root-path** - root path of target project;
+- **scripts-ref** - reference for version of scripts to use with the workflow, default value: `master`;
 
 ### Pull Request Label Checker
 
@@ -44,6 +45,7 @@ Checks that a PR contains labels specified in version configuration to ensure th
 **Input Parameters:**
 
 - **version-configuration-path** - path to version configuration.
+- **scripts-ref** - reference for version of scripts to use with the workflow, default value: `master`;
 
 ## PowerShell Scripts
 
@@ -55,7 +57,7 @@ This is a PS module which helps with incrementing version of specified project.
 
 - **Submit-NewVersionLabel** - reads the existing version for specified project type, increments accordingly and saves it. This is the main function of incrementing logic. More information: `Get-Help Submit-NewVersionLabel`.
 - **Get-IncrementingParts** - returns incrementing parts of version based on labels in related PR. More information: `Get-Help Get-IncrementingParts`.
-- **Get-VersionConfiguration** - reads and validates version configuration from specified file and returns it. More information: `Get-VersionConfiguration`.
-- **Get-PullRequestNumbers** - returns array of Pull Requests numbers linked to specified SHA. More information: `Get-PullRequestNumbers`.
-- **Get-Version** - returns version for specified project type. More information: `Get-Version`.
-- **Set-IncrementedVersion** - Increments the version for specified project type and saves it. More information: `Set-IncrementedVersion`.
+- **Get-VersionConfiguration** - reads and validates version configuration from specified file and returns it. More information: `Get-Help Get-VersionConfiguration`.
+- **Get-PullRequestNumbers** - returns array of Pull Requests numbers linked to specified SHA. More information: `Get-Help Get-PullRequestNumbers`.
+- **Get-Version** - returns version for specified project type. More information: `Get-Help Get-Version`.
+- **Set-IncrementedVersion** - Increments the version for specified project type and saves it. More information: `Get-Help Set-IncrementedVersion`.
