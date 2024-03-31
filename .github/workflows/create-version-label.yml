@@ -79,7 +79,7 @@ jobs:
 
           if ("${{ inputs.project-type }}" -eq "Posh")
           {
-            $newVersionLabelParams["PowerShellModuleName"] = ${{ inputs.posh-module-name }}
+            $newVersionLabelParams["PowerShellModuleName"] = "${{ inputs.posh-module-name }}"
           }
 
           $newVersion = Submit-NewVersionLabel @newVersionLabelParams
