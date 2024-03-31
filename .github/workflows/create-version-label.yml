@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: .
+      # https://github.com/orgs/community/discussions/114697
+      scripts-ref:
+        required: false
+        type: string
+        default: master
 
 jobs:
   create_label:
@@ -41,14 +46,21 @@ jobs:
         with:
           token: ${{ secrets.REPO_TOKEN }}
       - name: Checkout build-system repository
+        if: ${{ github.repository != 'sergey-koryshev/build-system' }}
         uses: actions/checkout@v3
         with:
           repository: sergey-koryshev/build-system
           path: build-system-repo
+          ref: ${{ inputs.scripts-ref }}
       - name: Set New Version
         shell: pwsh
         run: |
-          $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
+          if ("${{ github.repository }}" -eq "sergey-koryshev/build-system") {
+            $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "scripts/ps")"
+          } else {
+            $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "build-system-repo" "scripts/ps")"
+          }
+
           Import-Module VersionHelper -Force -Verbose
           $splitRepositoryName = "${{ github.repository }}" -split "/"
 
