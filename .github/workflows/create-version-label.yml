@@ -68,21 +68,7 @@ jobs:
             throw "Repository name cannot be parsed: ${{ github.repository }}"
           }
 
-          $newVersionLabelParams = @{
-            ProjectType = ${{ inputs.project-type }}
-            SHA = "${{ github.sha }}"
-            Owner = $splitRepositoryName[0]
-            Repository = $splitRepositoryName[1]
-            VersionConfigurationPath = (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}")
-            AuthToken = ${{ secrets.GITHUB_TOKEN }}
-          }
-
-          if ("${{ inputs.project-type }}" -eq "Posh")
-          {
-            $newVersionLabelParams["PowerShellModuleName"] = "${{ inputs.posh-module-name }}"
-          }
-
-          $newVersion = Submit-NewVersionLabel @newVersionLabelParams
+          $newVersion = Submit-NewVersionLabel -ProjectType ${{ inputs.project-type }} -PowerShellModuleName "${{ inputs.posh-module-name }}" -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }}
           "new-version=$newVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Commit New Version
         run: |
