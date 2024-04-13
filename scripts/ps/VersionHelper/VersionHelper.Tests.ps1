@@ -3,6 +3,10 @@ Import-Module VersionHelper -Force
 Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
 
   BeforeAll {
+    $script:VerbosePreference = 'SilentlyContinue'
+  }
+
+  AfterAll {
     $script:VerbosePreference = 'Continue'
   }
 
