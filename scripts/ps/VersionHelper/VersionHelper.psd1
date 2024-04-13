@@ -27,7 +27,14 @@
   Description = 'The PowerShell module helps to increment versions during CI'
 
   # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-  FunctionsToExport = '*'
+  FunctionsToExport = @(
+    'Submit-NewVersionLabel'
+    'Get-IncrementingParts'
+    'Get-VersionConfiguration'
+    'Get-PullRequestNumbers'
+    'Get-Version'
+    'Set-IncrementedVersion'
+  )
 
   # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
   CmdletsToExport = @()

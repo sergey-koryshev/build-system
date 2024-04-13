@@ -29,12 +29,44 @@ v1.0.1
 
 - **REPO_TOKEN** - (secret) token with write permissions to repository;
 - **app-name** - project name;
-- **project-type** - project type: Node, Posh;
+- **project-type** - project type: Node, Posh, Custom;
 - **version-configuration-path** - full path to version configuration.
 - **posh-module-name** - name of powershell module, needs to be specified in case of project type `Posh`;
+- **posh-custom-module-path** - path to powershell module with custom logic to get/set version, needs to be specified in case of project type `Custom`;
 - **skip-tag** - indicates if wether the workflow will create tag or not;
 - **root-path** - root path of target project;
 - **scripts-ref** - reference for version of scripts to use with the workflow, default value: `master`;
+
+**Notes**
+
+If you specify project type as `Custom` then you need to specify path to custom `PS` module which must have the following functions implemented:
+
+```posh
+function Get-Version {
+  [CmdletBinding()]
+  [OutputType([string])]
+  param ()
+
+  process {
+    ...
+  }
+}
+
+function Set-Version {
+  [CmdletBinding()]
+  param (
+    [string]
+    $OldVersion,
+
+    [string]
+    $NewVersion
+  )
+  
+  process {
+    ...
+  }
+}
+```
 
 ### Pull Request Label Checker
 
