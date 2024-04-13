@@ -1,4 +1,4 @@
-Import-Module ./VersionHelper -Force
+Import-Module VersionHelper -Force
 
 Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
 
