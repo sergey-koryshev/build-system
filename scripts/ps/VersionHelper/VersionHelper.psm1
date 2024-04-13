@@ -567,6 +567,11 @@ function Submit-NewVersionLabel {
     {
         $VerbosePreference = $PSCmdlet.GetVariableValue('VerbosePreference')
     }
+
+    Write-Host "Bound parameters:"
+    foreach ($parameter in $PSBoundParameters.GetEnumerator()) {
+      Write-Host "- $($parameter.Key): $(if ($parameter.Key -eq "AuthToken") { "*****" } else { $parameter.Value })"
+    }
   }
   
   process {
