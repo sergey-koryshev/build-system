@@ -1,3 +1,5 @@
+using namespace System.Management.Automation.Language
+
 $Script:Config = . { [CmdletBinding()] param() return $MyInvocation.MyCommand.Module.PrivateData.Settings }
 
 <#
@@ -18,6 +20,7 @@ enum VersionPart {
 enum ProjectType {
   Node
   Posh
+  Custom
 }
 
 <#
@@ -229,6 +232,9 @@ function Get-PullRequestNumbers {
   Get-Version -ProjectType Node
   Get-Version -ProjectType Posh -PowerShellModuleName MyModule
   Get-Version -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1
+  Get-Version -ProjectType Custom
+.NOTES
+  Before using this method with parameter "-ProjectType Custom" you need to have exported command 'Get-xVersion'
 .OUTPUTS
   Returns string version.
 #>
@@ -290,6 +296,19 @@ function Get-Version {
         }
       }
 
+      ([ProjectType]::Custom) {
+        if (-not(Test-CommandExists "Get-xVersion")) {
+          throw "There is no imported function 'Get-xVersion'"
+        }
+
+        Write-Host "Running custom logic to retrieve version"
+        $version = Get-xVersion
+
+        if ([string]::IsNullOrWhiteSpace($version)) {
+          throw "Version was not retrieved"
+        }
+      }
+
       Default {
         throw "Project type '$ProjectType' is unsupported"
       }
@@ -312,12 +331,13 @@ function Get-Version {
   - incrementing minor part zeroes patch part of the version.
   If suffix is not specified then it doesn't mean the existing suffix will be removed.
   To remove existing suffix you need to pass [string]::Empty to parameter Suffix.
+  Before using this method with parameter "-ProjectType Custom" you need to have exported commands 'Get-xVersion' and 'Set-xVersion'.
 .EXAMPLE
   Set-IncrementedVersion -ProjectType Node -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Node -IncrementPatch -Suffix "-RC1"
   Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName MyModule -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -IncrementPatch -Suffix "-RC1"
-
+  Set-IncrementedVersion -ProjectType Custom -IncrementPatch -Suffix "-RC1"
 .OUTPUTS
   Returns incremented string version.
 #>
@@ -329,7 +349,7 @@ function Set-IncrementedVersion {
     $ProjectType,
 
     [string]
-    # Specified the PowerShell module name.
+    # Specifies the PowerShell module name.
     $PowerShellModuleName,
 
     [switch]
@@ -368,7 +388,7 @@ function Set-IncrementedVersion {
     $parsedVersionMatch = $currentVersion -match $parsedVersionRegex
 
     if (!$parsedVersionMatch) {
-      throw "The version has incorrect format. Supported format: <major>.<minor>[.<patch>.<patch><suffix>]"
+      throw "The version '$currentVersion' has incorrect format. Supported format: <major>.<minor>[.<patch>.<patch><suffix>]"
     }
 
     $newMajor = [int]$Matches["major"]
@@ -455,10 +475,25 @@ function Set-IncrementedVersion {
 
         Test-ModuleManifest -Path $psModule.Path -ErrorAction Stop | Out-Null
       }
+
+      ([ProjectType]::Custom) {
+        if (-not(Test-CommandExists "Set-xVersion")) {
+          throw "There is no imported function 'Set-xVersion'"
+        }
+
+        Write-Host "Running custom logic to set version"
+        Set-xVersion -OldVersion $currentVersion -NewVersion $newVersion
+      }
   
       Default {
         throw "Project type '$ProjectType' is unsupported"
       }
+    }
+
+    Write-Host "Checking what new version was set successfully"
+
+    if ($newVersion -ne (Get-Version -ProjectType $ProjectType -PowerShellModuleName $PowerShellModuleName)) {
+      throw "New version was not set"
     }
 
     Write-Output $newVersion
@@ -482,6 +517,7 @@ function Set-IncrementedVersion {
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName MyModule -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath C:\Modules\CustomModule.psm1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
 .OUTPUTS
   Returns incremented string version.
 #>
@@ -493,8 +529,12 @@ function Submit-NewVersionLabel {
     $ProjectType,
 
     [string]
-    # Specified the PowerShell module name.
+    # Specifies the PowerShell module name.
     $PowerShellModuleName,
+
+    [string]
+    # Specifies the path to PowerShell script with custom logic.
+    $CustomPowershellModulePath,
 
     [string]
     # Specifies the SHA the pull request numbers are needed to be found for.
@@ -554,9 +594,70 @@ function Submit-NewVersionLabel {
       } | Out-Null
     }
 
-    $newVersion = Set-IncrementedVersion @setIncrementedVersionParams
+    $customPoShModule = $null
+
+    if ($ProjectType -eq [ProjectType]::Custom) {
+      if ([string]::IsNullOrWhiteSpace($CustomPowershellModulePath) -or -not(Test-Path $CustomPowershellModulePath)) {
+        throw "Parameter 'CustomPowershellModulePath' is not specified or the path doesn't exist"
+      }
+
+      $customPoShModule = Get-Module $CustomPowershellModulePath -ListAvailable | Select-Object -First 1
+
+      if (($null -eq $customPoShModule.ExportedCommands['Get-Version']) -or ($null -eq $customPoShModule.ExportedCommands['Set-Version'])) {
+        throw "Powershell module '$CustomPowershellModulePath' must includes functions 'Get-Version' and 'Set-Version'"
+      }
+
+      Import-Module $CustomPowershellModulePath -Scope Local -Prefix "x" -Force -Verbose -ErrorAction Stop
+    }
+
+    try {
+      $newVersion = Set-IncrementedVersion @setIncrementedVersionParams
+    }
+    finally {
+      if ($null -ne $customPoShModule) {
+        Remove-Module $customPoShModule -Force -Verbose -ErrorAction Stop
+      }
+    }
+
 
     Write-Output $newVersion
+  }
+  
+  end {
+    Write-Host "[$($MyInvocation.InvocationName)] - end"
+  }
+}
+
+<#
+.SYNOPSIS
+  Checks that specified command exists.
+.EXAMPLE
+  Test-CommandExists 'MyCommand'
+.OUTPUTS
+  Returns 'true' if the command exists, otherwise 'false'.
+#>
+function Test-CommandExists {
+  [CmdletBinding()]
+  param (
+    [string]
+    #Specifies command name
+    $Name
+  )
+  
+  begin {
+    Write-Host "[$($MyInvocation.InvocationName)] - begin"
+  }
+  
+  process {
+    try {
+      Get-Command $Name -ErrorAction Stop
+      Write-Host "Command '$Name' exists"
+      Write-Output $true
+    }
+    catch {
+      Write-Host "Command '$Name' doesn't exist"
+      Write-Output $false
+    }
   }
   
   end {
