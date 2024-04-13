@@ -1,4 +1,4 @@
-Import-Module /Users/sergey/Projects/active/build-system/scripts/ps/VersionHelper/VersionHelper.psd1 -Force
+Import-Module ./VersionHelper -Force
 
 Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
 
