@@ -612,7 +612,7 @@ function Submit-NewVersionLabel {
         throw "Powershell module '$CustomPowershellModulePath' must includes functions 'Get-Version' and 'Set-Version'"
       }
 
-      Import-Module $CustomPowershellModulePath -Scope Local -Prefix "x" -Force -Verbose -ErrorAction Stop
+      Import-Module $CustomPowershellModulePath -Scope Local -Prefix "x" -Force -ErrorAction Stop
     }
 
     try {
@@ -620,7 +620,7 @@ function Submit-NewVersionLabel {
     }
     finally {
       if ($null -ne $customPoShModule) {
-        Remove-Module $customPoShModule -Force -Verbose -ErrorAction Stop
+        Remove-Module $customPoShModule -Force -ErrorAction Stop
       }
     }
 
