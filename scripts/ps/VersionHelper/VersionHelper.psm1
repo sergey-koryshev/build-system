@@ -1,5 +1,3 @@
-using namespace System.Management.Automation.Language
-
 $Script:Config = . { [CmdletBinding()] param() return $MyInvocation.MyCommand.Module.PrivateData.Settings }
 
 <#
