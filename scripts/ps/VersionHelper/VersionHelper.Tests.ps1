@@ -290,4 +290,111 @@ Describe "e2e tests for module 'VersionHelper'" {
       $actual | Should -Be "2.3.4.6"
     }
   }
+
+  Describe "Testing project type 'Custom'" {
+  
+    BeforeAll {
+      New-Item -Path "TestDrive:\\" -Name "CustomModule" -ItemType Directory | Out-Null
+
+      @"
+function Get-Version {
+  param ()
+  
+  Write-Output (Get-Content "TestDrive:\CustomModule\version.txt")
+
+}
+
+function Set-Version {
+  param (
+    `$OldVersion,
+    `$NewVersion
+  )
+  
+  `$NewVersion | Out-File "TestDrive:\CustomModule\version.txt" -Force
+}
+"@ | Out-File "TestDrive:\CustomModule\CustomModule.psm1" -Force
+    }
+
+    AfterAll {
+      Remove-Item -Path "TestDrive:\CustomModule" -Recurse -Force | Out-Null
+    }
+
+    BeforeEach {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @()
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+
+      "2.3.4.5" | Out-File "TestDrive:\CustomModule\version.txt" -Force
+    }
+
+    It "Should increment major part" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "breaking changes"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "3.0.0.5"
+    }
+
+    It "Should increment minor part" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "enhancement"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.4.0.5"
+    }
+
+    It "Should increment patch part" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.5.5"
+    }
+
+    It "Should increment revision part" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "misc"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.4.6"
+    }
+  }
 }
