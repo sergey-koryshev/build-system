@@ -564,6 +564,11 @@ function Submit-NewVersionLabel {
   
   begin {
     Write-Host "[$($MyInvocation.InvocationName)] - begin"
+
+    if (-not $PSBoundParameters.ContainsKey('Verbose'))
+    {
+        $VerbosePreference = $PSCmdlet.GetVariableValue('VerbosePreference')
+    }
   }
   
   process {
