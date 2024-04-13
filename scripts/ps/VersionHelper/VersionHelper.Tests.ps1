@@ -1,6 +1,10 @@
-Import-Module VersionHelper -Force
+Import-Module /Users/sergey/Projects/active/build-system/scripts/ps/VersionHelper/VersionHelper.psd1 -Force
 
 Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
+
+  BeforeAll {
+    $script:VerbosePreference = 'Continue'
+  }
 
   Context "Unit Tests for method 'Get-VersionConfiguration'" {
 
