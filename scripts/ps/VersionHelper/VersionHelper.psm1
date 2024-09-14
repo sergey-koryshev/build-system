@@ -228,6 +228,7 @@ function Get-PullRequestNumbers {
   Returns version for specified project type.
 .EXAMPLE
   Get-Version -ProjectType Node
+  Get-Version -ProjectType Node -WorkspaceName "test-workspace"
   Get-Version -ProjectType Posh -PowerShellModuleName MyModule
   Get-Version -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1
   Get-Version -ProjectType Custom
@@ -245,7 +246,11 @@ function Get-Version {
 
     [string]
     # Specified the PowerShell module name.
-    $PowerShellModuleName
+    $PowerShellModuleName,
+
+    [string]
+    # (Optional) Name of workspace the new version be set for.
+    $WorkspaceName
   )
 
   begin {
@@ -259,7 +264,11 @@ function Get-Version {
       ([ProjectType]::Node) {
         Write-Host "Getting version from 'package.json'"
 
-        $version = (. npm pkg get version) -replace """", ""
+        if ([string]::IsNullOrWhiteSpace($WorkspaceName)) {
+          $version = (. npm pkg get version) -replace """", ""
+        } else {
+          $version = ((. npm pkg get version --workspace=$WorkspaceName) | ConvertFrom-Json).$WorkspaceName
+        }
 
         if ($LASTEXITCODE -ne 0) {
           throw "Something went wrong while getting version from 'package.json'"
@@ -333,6 +342,7 @@ function Get-Version {
 .EXAMPLE
   Set-IncrementedVersion -ProjectType Node -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Node -IncrementPatch -Suffix "-RC1"
+  Set-IncrementedVersion -ProjectType Node -WorkspaceName "test-workspace" -IncrementPatch -Suffix "-RC1"
   Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName MyModule -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -IncrementPatch -Suffix "-RC1"
   Set-IncrementedVersion -ProjectType Custom -IncrementPatch -Suffix "-RC1"
@@ -349,6 +359,10 @@ function Set-IncrementedVersion {
     [string]
     # Specifies the PowerShell module name.
     $PowerShellModuleName,
+
+    [string]
+    # (Optional) Name of workspace the new version be set for.
+    $WorkspaceName,
 
     [switch]
     # (Optional) Indicates whether the major part of version must be incremented.
@@ -377,7 +391,7 @@ function Set-IncrementedVersion {
   }
 
   process {
-    $currentVersion = Get-Version -ProjectType $ProjectType -PowerShellModuleName $PowerShellModuleName
+    $currentVersion = Get-Version -ProjectType $ProjectType -PowerShellModuleName $PowerShellModuleName -WorkspaceName $WorkspaceName
 
     $newVersion = [string]::Empty
 
@@ -430,7 +444,11 @@ function Set-IncrementedVersion {
       ([ProjectType]::Node) {
         Write-Host "Saving new version in 'package.json'"
 
-        (& npm version --no-commit-hooks --no-git-tag-version $newVersion) | Out-Null
+        if ([string]::IsNullOrWhiteSpace($WorkspaceName)) {
+          (. npm version --no-commit-hooks --no-git-tag-version $newVersion) | Out-Null
+        } else {
+          (. npm version --no-commit-hooks --no-git-tag-version $newVersion --workspace=$WorkspaceName) | Out-Null
+        }
 
         if ($LASTEXITCODE -ne 0) {
           throw "Something went wrong while saving new version in 'package.json'"
@@ -490,7 +508,7 @@ function Set-IncrementedVersion {
 
     Write-Host "Checking what new version was set successfully"
 
-    if ($newVersion -ne (Get-Version -ProjectType $ProjectType -PowerShellModuleName $PowerShellModuleName)) {
+    if ($newVersion -ne (Get-Version -ProjectType $ProjectType -PowerShellModuleName $PowerShellModuleName -WorkspaceName $WorkspaceName)) {
       throw "New version was not set"
     }
 
@@ -513,6 +531,7 @@ function Set-IncrementedVersion {
 .EXAMPLE
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json"
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Node -WorkspaceName "test-workspace" -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName MyModule -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath C:\Modules\CustomModule.psm1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
@@ -557,7 +576,11 @@ function Submit-NewVersionLabel {
 
     [string]
     # (Optional) Specifies the authentication token to invoke GitHub API.
-    $AuthToken
+    $AuthToken,
+
+    [string]
+    # (Optional) Name of workspace the new version be set for.
+    $WorkspaceName
   )
   
   begin {
@@ -591,12 +614,12 @@ function Submit-NewVersionLabel {
     $setIncrementedVersionParams = @{
       ProjectType = $ProjectType
       PowerShellModuleName = $PowerShellModuleName
+      WorkspaceName = $WorkspaceName
     }
 
     if ($relatedPRs.Length -eq 0) {
       $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($DefaultIncrementingPart))"] = $true;
-    }
-    else {
+    } else {
       Get-IncrementingParts -PullRequestId $relatedPRs[0] -Owner $Owner -Repository $Repository -VersionConfigurationPath $VersionConfigurationPath -AuthToken $AuthToken | ForEach-Object {
         $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($_))"] = $true;
       } | Out-Null
