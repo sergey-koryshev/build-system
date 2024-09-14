@@ -249,7 +249,7 @@ function Get-Version {
     $PowerShellModuleName,
 
     [string]
-    # (Optional) Name of workspace the new version be set for.
+    # (Optional) Name of workspace the new version should be set for.
     $WorkspaceName
   )
 
@@ -361,7 +361,7 @@ function Set-IncrementedVersion {
     $PowerShellModuleName,
 
     [string]
-    # (Optional) Name of workspace the new version be set for.
+    # (Optional) Name of workspace the new version should be set for.
     $WorkspaceName,
 
     [switch]
@@ -579,7 +579,7 @@ function Submit-NewVersionLabel {
     $AuthToken,
 
     [string]
-    # (Optional) Name of workspace the new version be set for.
+    # (Optional) Name of workspace the new version should be set for.
     $WorkspaceName
   )
   
