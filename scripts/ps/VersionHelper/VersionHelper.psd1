@@ -12,7 +12,7 @@
   RootModule = 'VersionHelper.psm1'
 
   # Version number of this module.
-  ModuleVersion = '1.2.1'
+  ModuleVersion = '1.3.0'
 
   # ID used to uniquely identify this module
   GUID = '1e1ef6dc-cf07-4f8d-957a-ec3e39216af1'
