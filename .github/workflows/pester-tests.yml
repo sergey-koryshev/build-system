@@ -21,7 +21,7 @@ jobs:
       - name: Run Pester tests for all scripts in ${{ inputs.root-path }}
         shell: pwsh
         run: |
-          Install-Module -Name Pester -RequiredVersion 5.5.0 -Scope CurrentUser -Force
+          Install-Module -Name Pester -RequiredVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
           $env:PSModulePath = $env:PSModulePath + ";$(Join-Path "${{ github.workspace }}" "${{ inputs.root-path }}")"
           $pesterConfiguration = New-PesterConfiguration
           $pesterConfiguration.Run.Path = Join-Path "${{ github.workspace }}" "${{ inputs.root-path }}"
