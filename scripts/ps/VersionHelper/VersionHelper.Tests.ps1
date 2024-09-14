@@ -119,86 +119,176 @@ Describe "e2e tests for module 'VersionHelper'" {
   }
 
   Describe "Testing project type 'Node'" {
+
+    Describe "Without workspaces" {
   
-    BeforeEach {
-      Mock -CommandName Invoke-RestMethod -MockWith { 
-        @()
-      } -ParameterFilter {
-        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
-      } -ModuleName VersionHelper
+      BeforeEach {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @()
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        @{
+          "version" = "2.3.4"
+        } | ConvertTo-Json > "TestDrive:\package.json"
+      }
+    
+      It "Should increment major version" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "breaking changes"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "3.0.0"
+      }
+    
+      It "Should increment minor version" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "enhancement"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.4.0"
+      }
+    
+      It "Should increment patch version" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.5"
+      }
   
-      @{
-        "version" = "2.3.4"
-      } | ConvertTo-Json > "TestDrive:\package.json"
-    }
-  
-    It "Should increment major version" {
-      Mock -CommandName Invoke-RestMethod -MockWith { 
-        @(
-          @{
-            name = "breaking changes"
-          }
-        )
-      } -ParameterFilter {
-        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
-      } -ModuleName VersionHelper
-  
-      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
-      
-      $actual = Get-Version -ProjectType Node
-      $actual | Should -Be "3.0.0"
-    }
-  
-    It "Should increment minor version" {
-      Mock -CommandName Invoke-RestMethod -MockWith { 
-        @(
-          @{
-            name = "enhancement"
-          }
-        )
-      } -ParameterFilter {
-        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
-      } -ModuleName VersionHelper
-  
-      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
-      
-      $actual = Get-Version -ProjectType Node
-      $actual | Should -Be "2.4.0"
-    }
-  
-    It "Should increment patch version" {
-      Mock -CommandName Invoke-RestMethod -MockWith { 
-        @(
-          @{
-            name = "bug"
-          }
-        )
-      } -ParameterFilter {
-        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
-      } -ModuleName VersionHelper
-  
-      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
-      
-      $actual = Get-Version -ProjectType Node
-      $actual | Should -Be "2.3.5"
+      It "Should propagate authorization token to all Invoke-RestMethod calls" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken | Out-Null
+        
+        Should -Invoke -CommandName Invoke-RestMethod -ParameterFilter {
+          ($Headers | ConvertTo-Json) -eq (@{ Authorization = "Bearer $fakeAuthToken"} | ConvertTo-Json)
+        } -Times 2 -ModuleName VersionHelper
+      }
     }
 
-    It "Should propagate authorization token to all Invoke-RestMethod calls" {
-      Mock -CommandName Invoke-RestMethod -MockWith { 
-        @(
-          @{
-            name = "bug"
-          }
-        )
-      } -ParameterFilter {
-        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
-      } -ModuleName VersionHelper
-  
-      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken | Out-Null
-      
-      Should -Invoke -CommandName Invoke-RestMethod -ParameterFilter {
-        ($Headers | ConvertTo-Json) -eq (@{ Authorization = "Bearer $fakeAuthToken"} | ConvertTo-Json)
-      } -Times 2 -ModuleName VersionHelper
+    Describe "With workspaces" {
+      BeforeEach {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @()
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        @{
+          "workspaces" = @(
+            "projects/test-project-1",
+            "projects/test-project-2"
+          )
+        } | ConvertTo-Json > "TestDrive:\package.json"
+
+        New-Item -Path "TestDrive:\projects\test-project-1" -ItemType Directory -Force
+        @{
+          "version" = "2.3.4"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-1\package.json"
+
+        New-Item -Path "TestDrive:\projects\test-project-2" -ItemType Directory -Force
+        @{
+          "version" = "3.4.5"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-2\package.json"
+      }
+
+      It "Should increment major version for specified workspace" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "breaking changes"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "4.0.0"
+      }
+
+      It "Should increment minor version for specified workspace" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "enhancement"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.5.0"
+      }
+
+      It "Should increment patch version for specified workspace" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.6"
+      }
     }
   }
 
