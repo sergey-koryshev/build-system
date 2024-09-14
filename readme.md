@@ -36,7 +36,7 @@ v1.0.1
 - **skip-tag** - indicates if wether the workflow will create tag or not;
 - **root-path** - root path of target project;
 - **scripts-ref** - reference for version of scripts to use with the workflow, default value: `master`;
-- **workspace-name** - name of npm-workspace where version need to be incremented. Can be specified in case of project type `Posh`;
+- **workspace-name** - name of npm-workspace where version need to be incremented. Can be specified in case of project type `Node`;
 
 **Notes**
 
