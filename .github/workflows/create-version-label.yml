@@ -1,3 +1,10 @@
+# 
+# Create Version Label
+# Increments version of specified project and submit it to repository
+# 
+# Version: 1.4.2
+#
+
 name: Create Version Label
 
 on:
@@ -59,6 +66,8 @@ jobs:
           repository: sergey-koryshev/build-system
           path: build-system-repo
           ref: ${{ inputs.scripts-ref }}
+      - name: Pull latest changes
+        run: git pull
       - name: Set New Version
         shell: pwsh
         run: |
@@ -84,12 +93,38 @@ jobs:
           $newVersion = Submit-NewVersionLabel -ProjectType ${{ inputs.project-type }} -PowerShellModuleName "${{ inputs.posh-module-name }}" -CustomPowershellModulePath $fullPoShCustomModulePath -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }} -WorkspaceName "${{ inputs.workspace-name }}" -Verbose
           "new-version=$newVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Commit New Version
+        shell: pwsh
         run: |
-          git config --global user.name "$env:GITHUB_ACTOR"
-          git config --global user.email "$env:GITHUB_ACTOR@users.noreply.github.com"
-          git pull
-          git status
-          git commit -am "[automated] Bumped ${{ inputs.app-name }} version to ${{ env.new-version }} [skip ci]"
-          if ("${{ inputs.skip-tag }}" -eq "false") { git tag ${{ inputs.app-name }}-v${{ env.new-version }} }
-          git push
-          git push --tags
+          function Invoke-CommandSafely {
+            param(
+              [string]
+              $Command
+            )
+
+            Invoke-Expression "& $Command" -ErrorAction Stop
+            
+            if ($LASTEXITCODE -ne 0) {
+              throw "Command [$Command] failed to execute."
+            }
+          }
+
+          Write-Host "====== Setting up git ======"
+          Invoke-CommandSafely "git config --global user.name ""$env:GITHUB_ACTOR"""
+          Invoke-CommandSafely "git config --global user.email ""$env:GITHUB_ACTOR@users.noreply.github.com"""
+          Invoke-CommandSafely "git config --global push.followTags true"
+
+          Write-Host
+          Write-Host "====== Pulling last changes ======"
+          Invoke-CommandSafely "git stash"
+          Invoke-CommandSafely "git pull"
+          Invoke-CommandSafely "git stash pop"
+
+          Write-Host
+          Write-Host "====== Submitting changes ======"
+          Invoke-CommandSafely "git commit -am ""[automated] Bumped ${{ inputs.app-name }} version to ${{ env.new-version }} [skip ci]"""
+
+          if ("false" -eq "false") {
+            Invoke-CommandSafely "git tag ${{ inputs.app-name }}-v${{ env.new-version }}"
+          }
+
+          Invoke-CommandSafely "git push"
