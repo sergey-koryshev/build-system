@@ -123,7 +123,7 @@ jobs:
           Write-Host "====== Submitting changes ======"
           Invoke-CommandSafely "git commit -am ""[automated] Bumped ${{ inputs.app-name }} version to ${{ env.new-version }} [skip ci]"""
 
-          if ("false" -eq "false") {
+          if ("${{ inputs.skip-tag }}" -eq "false") {
             Invoke-CommandSafely "git tag ${{ inputs.app-name }}-v${{ env.new-version }}"
           }
 
