@@ -14,15 +14,16 @@ on:
         description: 'Token to access to repository'
         required: true
     inputs:
-      app-name:
-        required: true
-        type: string
       project-type:
         required: true
         type: string
       version-configuration-path:
         required: true
         type: string
+      app-name:
+        required: false
+        type: string
+        default: ""
       posh-module-name:
         required: false
         type: string
@@ -121,11 +122,11 @@ jobs:
 
           Write-Host
           Write-Host "====== Submitting changes ======"
-          $annotation = "Bumped ${{ inputs.app-name }} version to ${{ env.new-version }}"
+          $annotation = "Bumped ${{ inputs.app-name }}$([string]::IsNullOrWhiteSpace("${{ inputs.app-name }}") ? [string]::Empty : " ")version to ${{ env.new-version }}"
           Invoke-CommandSafely "git commit -am ""[automated] $annotation [skip ci]"""
 
           if ("${{ inputs.skip-tag }}" -eq "false") {
-            Invoke-CommandSafely "git tag -a -m ""$annotation"" ""${{ inputs.app-name }}-v${{ env.new-version }}"""
+            Invoke-CommandSafely "git tag -a -m ""$annotation"" ""${{ inputs.app-name }}$([string]::IsNullOrWhiteSpace("${{ inputs.app-name }}") ? [string]::Empty : "-")v${{ env.new-version }}"""
           }
 
           Invoke-CommandSafely "git push"
