@@ -122,7 +122,7 @@ jobs:
 
           Write-Host
           Write-Host "====== Submitting changes ======"
-          $annotation = "Bumped ${{ inputs.app-name }}$([string]::IsNullOrWhiteSpace('${{ inputs.app-name }}') ? [string]::Empty : '')version to ${{ env.new-version }}"
+          $annotation = "Bumped ${{ inputs.app-name }}$([string]::IsNullOrWhiteSpace('${{ inputs.app-name }}') ? [string]::Empty : ' ')version to ${{ env.new-version }}"
           Invoke-CommandSafely "git commit -am ""[automated] $annotation [skip ci]"""
 
           if ("${{ inputs.skip-tag }}" -eq "false") {
