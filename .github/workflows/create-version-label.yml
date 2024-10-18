@@ -2,7 +2,7 @@
 # Create Version Label
 # Increments version of specified project and submit it to repository
 # 
-# Version: 1.4.2
+# Version: 1.4.3
 #
 
 name: Create Version Label
