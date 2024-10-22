@@ -532,9 +532,12 @@ function Set-IncrementedVersion {
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json"
   Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Node -WorkspaceName "test-workspace" -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Node -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -OverrideIncrementParts @("Minor", "Revision") -VersionConfigurationPath "C:\version-configuration.json"
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName MyModule -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
   Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -OverrideIncrementParts @("Minor", "Revision") -VersionConfigurationPath "C:\version-configuration.json"
   Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath C:\Modules\CustomModule.psm1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision" -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
+  Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath C:\Modules\CustomModule.psm1 -SHA "abcdef..." -Owner "Alex" -Repository "WarfaceAim" -DefaultIncrementingPart "Revision"  -OverrideIncrementParts @("Minor", "Revision") -VersionConfigurationPath "C:\version-configuration.json" -AuthToken "abcdef..."
 .OUTPUTS
   Returns incremented string version.
 #>
@@ -570,6 +573,10 @@ function Submit-NewVersionLabel {
     # It's used in case there are no related pull requests for specified SHA.
     $DefaultIncrementingPart,
 
+    [VersionPart[]]
+    # (Optional) Forces the script to use specified version parts to increment.
+    $OverrideIncrementParts,
+
     [string]
     # Specifies the path to version configuration file.
     $VersionConfigurationPath,
@@ -598,32 +605,40 @@ function Submit-NewVersionLabel {
   }
   
   process {
-    $relatedPRs = Get-PullRequestNumbers -SHA $SHA -Owner $Owner -Repository $Repository -AuthToken $AuthToken | Select-Object -First 1
-
-    if ($relatedPRs.Length -eq 0) {
-      Write-Host "There is no PRs linked to commit '$SHA'"
-      if ($null -eq $DefaultIncrementingPart) {
-        Write-Host "No default version part to increment was specified, skipping creating new version label"
-        exit 0
-      }
-      else {
-        Write-Host "Version part '$DefaultIncrementingPart' will be incremented"
-      }
-    }
-
     $setIncrementedVersionParams = @{
       ProjectType = $ProjectType
       PowerShellModuleName = $PowerShellModuleName
       WorkspaceName = $WorkspaceName
     }
 
-    if ($relatedPRs.Length -eq 0) {
-      $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($DefaultIncrementingPart))"] = $true;
+    $incrementingParts = @()
+
+    if (($null -eq $OverrideIncrementParts) -or ($OverrideIncrementParts.Length -eq 0)) {
+      $relatedPRs = Get-PullRequestNumbers -SHA $SHA -Owner $Owner -Repository $Repository -AuthToken $AuthToken | Select-Object -First 1
+
+      if ($relatedPRs.Length -eq 0) {
+        Write-Host "There is no PRs linked to commit '$SHA'"
+        if ($null -eq $DefaultIncrementingPart) {
+          Write-Host "No default version part to increment was specified, skipping creating new version label"
+          exit 0
+        }
+        else {
+          Write-Host "Version part '$DefaultIncrementingPart' will be incremented"
+        }
+      }
+
+      if ($relatedPRs.Length -eq 0) {
+        $incrementingParts = @($DefaultIncrementingPart)
+      } else {
+        $incrementingParts = Get-IncrementingParts -PullRequestId $relatedPRs[0] -Owner $Owner -Repository $Repository -VersionConfigurationPath $VersionConfigurationPath -AuthToken $AuthToken
+      }
     } else {
-      Get-IncrementingParts -PullRequestId $relatedPRs[0] -Owner $Owner -Repository $Repository -VersionConfigurationPath $VersionConfigurationPath -AuthToken $AuthToken | ForEach-Object {
-        $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($_))"] = $true;
-      } | Out-Null
+      $incrementingParts = $OverrideIncrementParts
     }
+    
+    $incrementingParts | ForEach-Object {
+      $setIncrementedVersionParams["Increment$((Get-Culture).TextInfo.ToTitleCase($_))"] = $true;
+    } | Out-Null
 
     $customPoShModule = $null
 
@@ -649,7 +664,6 @@ function Submit-NewVersionLabel {
         Remove-Module $customPoShModule -Force -ErrorAction Stop
       }
     }
-
 
     Write-Output $newVersion
   }
