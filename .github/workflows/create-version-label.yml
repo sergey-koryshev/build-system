@@ -2,7 +2,7 @@
 # Create Version Label
 # Increments version of specified project and submit it to repository
 # 
-# Version: 1.4.3
+# Version: 1.5.0
 #
 
 name: Create Version Label
@@ -44,6 +44,10 @@ on:
         type: string
         default: master
       workspace-name:
+        required: false
+        type: string
+        default: ""
+      override-increment-parts:
         required: false
         type: string
         default: ""
@@ -91,7 +95,13 @@ jobs:
             $fullPoShCustomModulePath = $(Join-Path "${{ github.workspace }}" "${{ inputs.posh-custom-module-path }}")
           }
 
-          $newVersion = Submit-NewVersionLabel -ProjectType ${{ inputs.project-type }} -PowerShellModuleName "${{ inputs.posh-module-name }}" -CustomPowershellModulePath $fullPoShCustomModulePath -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }} -WorkspaceName "${{ inputs.workspace-name }}" -Verbose
+          $overrideIncrementParts = @()
+
+          if (-not ([string]::IsNullOrWhiteSpace("${{ inputs.override-increment-parts }}"))) {
+            $overrideIncrementParts = "${{ inputs.override-increment-parts }}" -split ","
+          }
+
+          $newVersion = Submit-NewVersionLabel -ProjectType ${{ inputs.project-type }} -PowerShellModuleName "${{ inputs.posh-module-name }}" -CustomPowershellModulePath $fullPoShCustomModulePath -SHA "${{ github.sha }}" -Owner $splitRepositoryName[0] -Repository $splitRepositoryName[1] -VersionConfigurationPath (Join-Path "${{ github.workspace }}" "${{ inputs.version-configuration-path }}") -AuthToken ${{ secrets.GITHUB_TOKEN }} -WorkspaceName "${{ inputs.workspace-name }}" -OverrideIncrementParts $overrideIncrementParts -Verbose
           "new-version=$newVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Commit New Version
         shell: pwsh
