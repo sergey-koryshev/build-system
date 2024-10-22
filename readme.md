@@ -37,6 +37,7 @@ v1.0.1
 - **root-path** - root path of target project;
 - **scripts-ref** - reference for version of scripts to use with the workflow, default value: `master`;
 - **workspace-name** - name of npm-workspace where version need to be incremented. Can be specified in case of project type `Node`;
+- **override-increment-parts** - comma separated version parts to increment. If specified, it forces the workflow to increment specified version parts instead of determined based on PR's label.
 
 **Notes**
 

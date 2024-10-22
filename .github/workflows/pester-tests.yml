@@ -13,9 +13,9 @@ jobs:
     name: Pester Tests
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Use Node.js 16.x
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16.x
       - name: Run Pester tests for all scripts in ${{ inputs.root-path }}
@@ -31,7 +31,7 @@ jobs:
           Invoke-Pester -Configuration $pesterConfiguration
       - name: Publish Artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: 'pester-test-result'
           path: 'tests/test-result.xml'

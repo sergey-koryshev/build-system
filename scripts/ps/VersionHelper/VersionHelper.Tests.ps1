@@ -202,6 +202,23 @@ Describe "e2e tests for module 'VersionHelper'" {
           ($Headers | ConvertTo-Json) -eq (@{ Authorization = "Bearer $fakeAuthToken"} | ConvertTo-Json)
         } -Times 2 -ModuleName VersionHelper
       }
+
+      It "Should override increment parts" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken -OverrideIncrementParts @("Minor") | Out-Null
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.4.0"
+      }
     }
 
     Describe "With workspaces" {
