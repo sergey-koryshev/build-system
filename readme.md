@@ -28,6 +28,7 @@ v1.0.1
 **Input Parameters:**
 
 - **REPO_TOKEN** - (secret) token with write permissions to repository;
+- **NPMRC** - (secret) optional content of .npmrc file which will be applied on the runner;
 - **app-name** - project name;
 - **project-type** - project type: Node, Posh, Custom;
 - **version-configuration-path** - full path to version configuration.

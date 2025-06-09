@@ -2,7 +2,7 @@
 # Create Version Label
 # Increments version of specified project and submit it to repository
 # 
-# Version: 1.5.0
+# Version: 1.6.0
 #
 
 name: Create Version Label
@@ -13,6 +13,9 @@ on:
       REPO_TOKEN:
         description: 'Token to access to repository'
         required: true
+      NPMRC:
+        description: 'Content of .npmrc file to append on the runner'
+        required: false
     inputs:
       project-type:
         required: true
@@ -71,6 +74,14 @@ jobs:
           repository: sergey-koryshev/build-system
           path: build-system-repo
           ref: ${{ inputs.scripts-ref }}
+      - name: Modify .npmrc file
+        shell: pwsh
+        run: |
+          if ([String]::IsNullOrWhiteSpace("${{ secrets.NPMRC }}")) {
+            Write-Host "Secret 'NPMRC' is not provided. Skipping..."
+          } else {
+            "${{ secrets.NPMRC }}" >> ~/.npmrc
+          }
       - name: Pull latest changes
         run: git pull
       - name: Set New Version
