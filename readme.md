@@ -70,6 +70,11 @@ function Set-Version {
 }
 ```
 
+**Suffix Increment**
+
+If `Suffix` is used as part to increment, then the existing/specified suffix will have `.N` at the end. It applies to all project types except `Posh`. Given it doesn't support `dot` in `Prerelease` string, the incremental part will be just `N` without `dot`.
+
+
 ### Pull Request Label Checker
 
 **Path:** `.github/workflows/pr-label-checker.yml`

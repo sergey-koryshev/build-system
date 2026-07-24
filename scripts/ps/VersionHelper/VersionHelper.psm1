@@ -9,6 +9,7 @@ enum VersionPart {
   Minor
   Patch
   Revision
+  Suffix
 }
 
 <#
@@ -301,6 +302,16 @@ function Get-Version {
         if ([string]::IsNullOrWhiteSpace($version)) {
           throw "Version doesn't exist in manifest of module '$($PowerShellModuleName)'"
         }
+
+        $suffix = [string]::Empty
+        if (($null -ne $psModule.PrivateData) -and ($null -ne $psModule.PrivateData.PSData) -and ($null -ne $psModule.PrivateData.PSData.Prerelease)) {
+          $suffix = $psModule.PrivateData.PSData.Prerelease
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($suffix)) {
+          $sanitizedSuffix = $suffix -replace "^-*", [string]::Empty
+          $version = "{0}-{1}" -f $version, $sanitizedSuffix
+        }
       }
 
       ([ProjectType]::Custom) {
@@ -337,12 +348,13 @@ function Get-Version {
   - incrementing major part zeroes following parts of the version: minor and patch;
   - incrementing minor part zeroes patch part of the version.
   If suffix is not specified then it doesn't mean the existing suffix will be removed.
-  To remove existing suffix you need to pass [string]::Empty to parameter Suffix.
+  To remove existing suffix you need to pass set parameter RemoveSuffix to true explicitly.
   Before using this method with parameter "-ProjectType Custom" you need to have exported commands 'Get-xVersion' and 'Set-xVersion'.
 .EXAMPLE
   Set-IncrementedVersion -ProjectType Node -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Node -IncrementPatch -Suffix "-RC1"
   Set-IncrementedVersion -ProjectType Node -WorkspaceName "test-workspace" -IncrementPatch -Suffix "-RC1"
+  Set-IncrementedVersion -ProjectType Node -WorkspaceName "test-workspace" -IncrementPatch -RemoveSuffix
   Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName MyModule -IncrementMajor -IncrementRevision
   Set-IncrementedVersion -ProjectType Posh -PowerShellModuleName C:\Modules\MyModule.psd1 -IncrementPatch -Suffix "-RC1"
   Set-IncrementedVersion -ProjectType Custom -IncrementPatch -Suffix "-RC1"
@@ -380,9 +392,18 @@ function Set-IncrementedVersion {
     # (Optional) Indicates whether the revision part of version must be incremented.
     $IncrementRevision,
 
+    [switch]
+    # (Optional) Indicates whether the suffix part of version must be incremented.
+    $IncrementSuffix,
+
     [string]
     # (Optional) Specified the suffix to be added to the incremented version.
-    $Suffix
+    $Suffix,
+
+    [switch]
+    # (Optional) Indicates whether to remove the existing suffix.
+    # If suffix does not exist then this parameter has no effect.
+    $RemoveSuffix
   )
 
   begin {
@@ -428,15 +449,38 @@ function Set-IncrementedVersion {
       $newRevision++
     }
 
-    if ($null -ne $Suffix) {
-      $newSuffix = $Suffix
+    if ($RemoveSuffix.IsPresent) {
+      $newSuffix = [string]::Empty
+    } else {
+      if (-not [string]::IsNullOrWhiteSpace($Suffix)) {
+        $newSuffix = $Suffix
+      }
+    }
+
+    if ($IncrementSuffix.IsPresent -and (-not [string]::IsNullOrWhiteSpace($newSuffix))) {
+      $versionDelimiter = "."
+
+      if ($ProjectType -eq [ProjectType]::Posh)
+      {
+        # Powershell module doesn't support dot character in Prerelease string
+        $versionDelimiter = [string]::Empty
+      }
+
+      $escapedVersionDelimiter = $([Regex]::Escape($versionDelimiter))
+
+      if ($newSuffix -match "$escapedVersionDelimiter(?<number>\d+)$") {
+        $newIncrementedPart = "{0}{1}" -f $versionDelimiter, ([int]$Matches["number"] + 1)
+        $newSuffix = $newSuffix -replace "$escapedVersionDelimiter\d+$", $newIncrementedPart
+      } else {
+        $newSuffix = "{0}{1}1" -f $newSuffix, $versionDelimiter
+      }
     }
 
     $newVersion = "{0}{1}{2}{3}{4}" -f $newMajor,
-    ".$newMinor",
-    $(if ($null -ne $newPatch) { ".$newPatch" } else { [string]::Empty }),
-    $(if ($null -ne $newRevision) { ".$newRevision" } else { [string]::Empty }),
-    $(if ($null -ne $newSuffix) { $newSuffix } else { [string]::Empty })
+      ".$newMinor",
+      $(if ($null -ne $newPatch) { ".$newPatch" } else { [string]::Empty }),
+      $(if ($null -ne $newRevision) { ".$newRevision" } else { [string]::Empty }),
+      $(if ($null -ne $newSuffix) { $newSuffix } else { [string]::Empty })
 
     Write-Host "New version is '$newVersion'"
 
@@ -460,6 +504,10 @@ function Set-IncrementedVersion {
           throw "Parameter 'PowerShellModuleName' is not specified"
         }
 
+        if (-not [string]::IsNullOrWhiteSpace($newSuffix) -and -not [string]::IsNullOrWhiteSpace($newRevision)) {
+          throw "Suffix cannot be set if Revision is specified"
+        }
+
         $psModule = Get-Module -Name $PowerShellModuleName -ListAvailable
 
         if ($psModule.Length -eq 0) {
@@ -472,24 +520,12 @@ function Set-IncrementedVersion {
 
         Write-Host "Saving new version in manifest of module '$($PowerShellModuleName)'"
 
-        $lineToModifyRegex = "^\s*ModuleVersion\s*=\s*('|"")$currentVersion('|"")\s*$"
-        $found = $false
+        $newVersionWithoutSuffix = "{0}{1}{2}{3}" -f $newMajor,
+          ".$newMinor",
+          $(if ($null -ne $newPatch) { ".$newPatch" } else { [string]::Empty }),
+          $(if ($null -ne $newRevision) { ".$newRevision" } else { [string]::Empty })
 
-        (Get-Content -Path $psModule.Path | 
-          Foreach-Object { 
-            if ($found -eq $false -and $_ -match $lineToModifyRegex) {
-              $found = $true
-              Write-Output ($_ -replace ([Regex]::Escape($currentVersion)), $newVersion)
-            } else {
-              Write-Output $_
-            }
-          }) | Set-Content $psModule.Path -Force
-
-        if ($found -eq $false) {
-          throw "Version related line was not found in file $($psModule.Path)"
-        }
-
-        Test-ModuleManifest -Path $psModule.Path -ErrorAction Stop | Out-Null
+        Set-PoshVersion -ModulePath $($psModule.Path) -NewVersion $newVersionWithoutSuffix -Suffix $newSuffix -RemoveSuffix:$RemoveSuffix -ErrorAction Stop
       }
 
       ([ProjectType]::Custom) {
@@ -587,7 +623,18 @@ function Submit-NewVersionLabel {
 
     [string]
     # (Optional) Name of workspace the new version should be set for.
-    $WorkspaceName
+    $WorkspaceName,
+
+    [string]
+    # (Optional) Specified the suffix to be added to the incremented version.
+    # If suffix is not specified then it doesn't mean the existing suffix will be removed.
+    # To remove existing suffix you need to set flag $RemoveSuffix to $true.
+    $Suffix,
+
+    [switch]
+    # (Optional) Indicates whether to remove the existing suffix.
+    # If suffix does not exist then this parameter has no effect.
+    $RemoveSuffix
   )
   
   begin {
@@ -609,6 +656,8 @@ function Submit-NewVersionLabel {
       ProjectType = $ProjectType
       PowerShellModuleName = $PowerShellModuleName
       WorkspaceName = $WorkspaceName
+      Suffix = $Suffix
+      RemoveSuffix = $RemoveSuffix
     }
 
     $incrementingParts = @()
@@ -707,5 +756,131 @@ function Test-CommandExists {
   
   end {
     Write-Host "[$($MyInvocation.InvocationName)] - end"
+  }
+}
+
+<#
+.SYNOPSIS
+    Sets PrivateData.PSData.Prerelease in a module manifest (.psd1), in place.
+    Assumes PrivateData.PSData already exists in the manifest (standard for
+    manifests created with New-ModuleManifest / published to a gallery).
+
+.EXAMPLE
+    ./Set-ManifestPrerelease.ps1 -Path .\MyModule.psd1 -Prerelease 'beta1'
+#>
+function Set-PoshVersion {
+  [CmdletBinding()]
+  param(
+    # Path to module where the version should be set.
+    [string]
+    $ModulePath,
+
+    # Version to be set.
+    [string]
+    $NewVersion,
+
+    # Optional suffix to be set.
+    [string]
+    $Suffix,
+
+    [switch]
+    $RemoveSuffix
+  )
+
+  begin {
+    Write-Host "[$($MyInvocation.InvocationName)] - begin"
+
+    if (-not [string]::IsNullOrWhiteSpace($Suffix)) {
+      if ($Suffix -match '[^0-9A-Za-z-]')
+      {
+        throw "'Prerelease' string may contain only ASCII alphanumerics [0-9A-Za-z-]"
+      }
+
+      if ($Suffix -match '(.)-')
+      {
+        throw "A hyphen may be included in the 'Prerelease' string as the first character, only"
+      }
+    }
+  }
+
+  end {
+    Write-Host "[$($MyInvocation.InvocationName)] - end"
+  }
+
+  process {
+    function Find-Entry($HashtableAst, $Key) {
+      $HashtableAst.KeyValuePairs | Where-Object { $_.Item1.SafeGetValue() -eq $Key } | Select-Object -First 1
+    }
+
+    $text = Get-Content -LiteralPath $ModulePath -Raw
+
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$parseErrors)
+    if ($parseErrors) {
+      throw "Failed to parse '$ModulePath': $($parseErrors | Out-String)"
+    }
+
+    $root = $ast.Find({ $args[0] -is [System.Management.Automation.Language.HashtableAst] }, $false)
+    if ($null -eq $root)
+    {
+      throw "'$ModulePath' has incorrect structure"
+    }
+
+    $moduleVersion = Find-Entry $root 'ModuleVersion'
+    if (-not $moduleVersion) {
+      throw "No ModuleVersion found in '$ModulePath'."
+    }
+
+    $moduleVersionExtent = $moduleVersion.Item2.Extent
+    $text = $text.Remove(
+      $moduleVersionExtent.StartOffset, 
+      ($moduleVersionExtent.EndOffset - $moduleVersionExtent.StartOffset)
+    ).Insert($moduleVersionExtent.StartOffset, "'$NewVersion'")
+    Write-Host "ModuleVersion is set to '$NewVersion'."
+
+    if (-not [string]::IsNullOrWhiteSpace($Suffix) -or $RemoveSuffix.IsPresent) {
+      $privateData = Find-Entry $root 'PrivateData'
+      if (-not $privateData) {
+        throw "No PrivateData hashtable found in '$ModulePath'. Add 'PrivateData = @{ PSData = @{} }' first."
+      }
+      $privateDataHt = $privateData.Item2.Find({ $args[0] -is [System.Management.Automation.Language.HashtableAst] }, $true)
+
+      $psData = Find-Entry $privateDataHt 'PSData'
+      if (-not $psData) {
+        throw "No PSData hashtable found under PrivateData in '$ModulePath'. Add 'PSData = @{}' first."
+      }
+      $psDataHt = $psData.Item2.Find({ $args[0] -is [System.Management.Automation.Language.HashtableAst] }, $true)
+
+      $value = "'$Suffix'"
+      $prerelease = Find-Entry $psDataHt 'Prerelease'
+
+      if ($prerelease) {
+          $prereleaseExtent = $prerelease.Item2.Extent
+          $text = $text.Remove($prereleaseExtent.StartOffset, $prereleaseExtent.EndOffset - $prereleaseExtent.StartOffset).Insert($prereleaseExtent.StartOffset, $value)
+      } else {
+          if ($psDataHt.KeyValuePairs.Count -gt 0) {
+              $siblingLine = ($text -split "`n")[$psDataHt.KeyValuePairs[0].Item1.Extent.StartLineNumber - 1]
+              $indent = '    '
+              if ($siblingLine -match '^([ \t]*)') {
+                $Matches[1]
+              }
+          } else {
+              $psDataLine = ($text -split "`n")[$psData.Item1.Extent.StartLineNumber - 1]
+              $baseIndent = ''
+              if ($psDataLine -match '^([ \t]*)') {
+                $Matches[1]
+              }
+              $indent = $baseIndent + '    '
+          }
+
+          $insertAt = $psDataHt.Extent.EndOffset - 1
+          $text = $text.Insert($insertAt, "`r`n${indent}Prerelease = $value")
+      }
+
+      Write-Host "Prerelease set to '$Suffix'."
+    }
+
+    Set-Content -LiteralPath $ModulePath -Value $text -NoNewline -Force -ErrorAction Stop
+    Test-ModuleManifest -Path $psModule.Path -ErrorAction Stop | Out-Null
   }
 }
