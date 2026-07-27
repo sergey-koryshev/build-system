@@ -15,7 +15,7 @@ jobs:
     name: Create Version Label
     uses: ./.github/workflows/create-version-label.yml
     secrets:
-      REPO_TOKEN: ${{ secrets.REPO_PAT }}
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
     with:
       app-name: version-helper
       project-type: Posh
