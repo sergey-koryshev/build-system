@@ -23,7 +23,7 @@ Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
       Mock -CommandName Get-Content -MockWith { } -ModuleName VersionHelper
     }
 
-    It "Should throw excpetion if provided path doesn't exist" {
+    It "Should throw exception if provided path doesn't exist" {
       { Get-VersionConfiguration -Path $fakeNotExistingPath } | Should -Throw "Configuration path '$fakeNotExistingPath' doesn't exist"
     }
 
@@ -48,10 +48,10 @@ Describe "Unit Tests for module 'VersionHelper'" -Tag "UnitTest" {
         } | ConvertTo-Json
       } -ModuleName VersionHelper
 
-      { Get-VersionConfiguration -Path $fakePath } | Should -Throw "Unsupported parts detected in configuration: Unsupported1, Unsupported2. Only follow values are supported: Major, Minor, Patch, Revision"
+      { Get-VersionConfiguration -Path $fakePath } | Should -Throw "Unsupported parts detected in configuration: Unsupported1, Unsupported2. Only follow values are supported: Major, Minor, Patch, Revision, Suffix"
     }
 
-    It "Should return excpetion if configuration contains duplicated parts to increment" {
+    It "Should return exception if configuration contains duplicated parts to increment" {
       Mock -CommandName Get-Content -MockWith {
         @{
           "bug"           = @("Patch", "Patch")
@@ -99,6 +99,8 @@ Describe "e2e tests for module 'VersionHelper'" {
       "enhancement"      = @("Minor")
       "breaking changes" = @("Major")
       "misc"             = @("Revision")
+      "suffix"           = @("Suffix")
+      "suffix-patch"     = @("Suffix", "Patch")
     } | ConvertTo-Json > $versionConfigPath
 
     Mock -CommandName Invoke-RestMethod -MockWith { 
@@ -116,6 +118,103 @@ Describe "e2e tests for module 'VersionHelper'" {
 
   AfterAll {
     Set-Location $originalWorkDirectory
+  }
+
+  Describe "General tests for method 'Submit-NewVersionLabel'" {
+    BeforeEach {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            number = 108
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/commits/{2}/pulls" -f $fakeOwner, $fakeRepository, $fakeSHA)
+      } -ModuleName VersionHelper
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @()
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      @{
+        "version" = "2.3.4"
+      } | ConvertTo-Json > "TestDrive:\package.json"
+    }
+
+    It "Should propagate authorization token to all Invoke-RestMethod calls" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken | Out-Null
+      
+      Should -Invoke -CommandName Invoke-RestMethod -ParameterFilter {
+        ($Headers | ConvertTo-Json) -eq (@{ Authorization = "Bearer $fakeAuthToken"} | ConvertTo-Json)
+      } -Times 2 -ModuleName VersionHelper
+    }
+
+    It "Should override increment parts" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken -OverrideIncrementParts @("Minor") | Out-Null
+      
+      $actual = Get-Version -ProjectType Node
+      $actual | Should -Be "2.4.0"
+    }
+
+    It "Should use default increment part if there is no PR linked" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @()
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/commits/{2}/pulls" -f $fakeOwner, $fakeRepository, $fakeSHA)
+      } -ModuleName VersionHelper
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @()
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken -DefaultIncrementingPart "Minor" | Out-Null
+      
+      $actual = Get-Version -ProjectType Node
+      $actual | Should -Be "2.4.0"
+    }
+
+    It "Should use default increment part if there is no PR linked and no default increment part specified" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @()
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/commits/{2}/pulls" -f $fakeOwner, $fakeRepository, $fakeSHA)
+      } -ModuleName VersionHelper
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @()
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken -DefaultIncrementingPart "Minor" | Out-Null
+      
+      $actual = Get-Version -ProjectType Node
+      $actual | Should -Be "2.4.0"
+    }
   }
 
   Describe "Testing project type 'Node'" {
@@ -184,26 +283,8 @@ Describe "e2e tests for module 'VersionHelper'" {
         $actual = Get-Version -ProjectType Node
         $actual | Should -Be "2.3.5"
       }
-  
-      It "Should propagate authorization token to all Invoke-RestMethod calls" {
-        Mock -CommandName Invoke-RestMethod -MockWith { 
-          @(
-            @{
-              name = "bug"
-            }
-          )
-        } -ParameterFilter {
-          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
-        } -ModuleName VersionHelper
-    
-        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken | Out-Null
-        
-        Should -Invoke -CommandName Invoke-RestMethod -ParameterFilter {
-          ($Headers | ConvertTo-Json) -eq (@{ Authorization = "Bearer $fakeAuthToken"} | ConvertTo-Json)
-        } -Times 2 -ModuleName VersionHelper
-      }
 
-      It "Should override increment parts" {
+      It "Should add suffix to version" {
         Mock -CommandName Invoke-RestMethod -MockWith { 
           @(
             @{
@@ -214,10 +295,124 @@ Describe "e2e tests for module 'VersionHelper'" {
           $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
         } -ModuleName VersionHelper
     
-        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -AuthToken $fakeAuthToken -OverrideIncrementParts @("Minor") | Out-Null
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "-rc"
         
         $actual = Get-Version -ProjectType Node
-        $actual | Should -Be "2.4.0"
+        $actual | Should -Be "2.3.5-rc"
+      }
+
+      It "Should keep existing suffix" {
+        @{
+          "version" = "2.3.4-rc"
+        } | ConvertTo-Json > "TestDrive:\package.json"
+
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.5-rc"
+      }
+
+      It "Should increment new suffix" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "suffix"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "-rc"
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.4-rc.1"
+      }
+
+      It "Should increment existing suffix" {
+        @{
+          "version" = "2.3.4-rc.3"
+        } | ConvertTo-Json > "TestDrive:\package.json"
+
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "suffix"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.4-rc.4"
+      }
+
+      It "Should not throw exception if suffix doesn't exist but requested to be incremented" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "suffix-patch"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.5"
+      }
+
+      It "Should remove suffix" {
+        @{
+          "version" = "2.3.4-rc"
+        } | ConvertTo-Json > "TestDrive:\package.json"
+
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.5"
+      }
+
+      It "Should not throw exception if suffix doesn't exist but requested to be removed" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+        
+        $actual = Get-Version -ProjectType Node
+        $actual | Should -Be "2.3.5"
       }
     }
 
@@ -306,6 +501,173 @@ Describe "e2e tests for module 'VersionHelper'" {
         $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
         $workspace1Version | Should -Be "3.4.6"
       }
+
+      It "Should add suffix to version in specified workspace" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2" -Suffix "-rc"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.6-rc"
+      }
+
+      It "Should keep existing suffix in specified workspace" {
+        New-Item -Path "TestDrive:\projects\test-project-1" -ItemType Directory -Force
+        @{
+          "version" = "2.3.4-alpha"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-1\package.json"
+
+        New-Item -Path "TestDrive:\projects\test-project-2" -ItemType Directory -Force
+        @{
+          "version" = "3.4.5-beta"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-2\package.json"
+
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4-alpha"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.6-beta"
+      }
+
+      It "Should increment new suffix in specified workspace" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "suffix"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2" -Suffix "-rc"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.5-rc.1"
+      }
+
+      It "Should increment existing suffix in specified workspace" {
+        New-Item -Path "TestDrive:\projects\test-project-1" -ItemType Directory -Force
+        @{
+          "version" = "2.3.4"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-1\package.json"
+
+        New-Item -Path "TestDrive:\projects\test-project-2" -ItemType Directory -Force
+        @{
+          "version" = "3.4.5-rc.3"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-2\package.json"
+
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "suffix"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.5-rc.4"
+      }
+
+      It "Should not throw exception if suffix doesn't exist but requested to be incremented in specified workspace" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "suffix-patch"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -WorkspaceName "test-project-2"
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.6"
+      }
+
+      It "Should remove suffix for specified workspace" {
+        New-Item -Path "TestDrive:\projects\test-project-1" -ItemType Directory -Force
+        @{
+          "version" = "2.3.4-alpha"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-1\package.json"
+
+        New-Item -Path "TestDrive:\projects\test-project-2" -ItemType Directory -Force
+        @{
+          "version" = "3.4.5-beta"
+        } | ConvertTo-Json > "TestDrive:\projects\test-project-2\package.json"
+
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -WorkspaceName "test-project-2" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4-alpha"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.6"
+      }
+
+      It "Should not throw exception if suffix doesn't exist in specified workspace but requested to be removed" {
+        Mock -CommandName Invoke-RestMethod -MockWith { 
+          @(
+            @{
+              name = "bug"
+            }
+          )
+        } -ParameterFilter {
+          $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+        } -ModuleName VersionHelper
+    
+        Submit-NewVersionLabel -ProjectType Node -WorkspaceName "test-project-2" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+        
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-1"
+        $workspace1Version | Should -Be "2.3.4"
+
+        $workspace1Version = Get-Version -ProjectType Node -WorkspaceName "test-project-2"
+        $workspace1Version | Should -Be "3.4.6"
+      }
     }
   }
 
@@ -325,8 +687,15 @@ Describe "e2e tests for module 'VersionHelper'" {
       } -ParameterFilter {
         $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
       } -ModuleName VersionHelper
-      
-      New-ModuleManifest -Path "TestDrive:\TestModule\TestModule.psd1" -ModuleVersion "2.3.4.5"
+
+      Set-Content "@{
+          RootModule        = ''
+          ModuleVersion     = '2.3.4.5'
+          GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+          Author            = 'Your Name'
+          Description       = 'A brief description of your module'
+          PowerShellVersion = '5.1'
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
     }
 
     It "Should increment major part" {
@@ -395,6 +764,235 @@ Describe "e2e tests for module 'VersionHelper'" {
       
       $actual = Get-Version -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
       $actual | Should -Be "2.3.4.6"
+    }
+
+    It "Should add suffix to version" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = '' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "-posh"
+      
+      $actual = Get-Version -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.5-posh"
+    }
+
+    It "Should keep existing suffix" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = 'rc' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith {
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Version -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.5-rc"
+    }
+
+    It "Should increment new suffix" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = '' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "-rc"
+      
+      $actual = Get-Version -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.4-rc1"
+    }
+
+    It "Should increment existing suffix" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = 'rc3' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Version Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.4-rc4"
+    }
+
+    It "Should not throw exception if suffix doesn't exist but requested to be incremented" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix-patch"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Version Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.5.5"
+    }
+
+    It "Should throw exception if suffix contains incorrect symbols: <suffix>" -ForEach @( @{ suffix = "@108" }, @{ suffix = "important!" }, @{ suffix = "new feature" } ) {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = '' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      { Submit-NewVersionLabel Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix $suffix }
+        | Should -Throw -ExpectedMessage "'Prerelease' string may contain only ASCII alphanumerics ``[0-9A-Za-z-``]"
+    }
+
+    It "Should throw exception if suffix specified along with revision" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4.5'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = '' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      { Submit-NewVersionLabel Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "alpha" }
+        | Should -Throw "Suffix cannot be set if Revision is specified"
+    }
+
+    It "Should remove suffix" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = '-alpha' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+      
+      $actual = Get-Version -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.5"
+    }
+
+    It "Should not throw exception if suffix doesn't exist but requested to be removed" {
+      Set-Content "@{
+        RootModule        = ''
+        ModuleVersion     = '2.3.4'
+        GUID              = '5793c879-c461-4b9c-addb-abc3480a6007'
+        Author            = 'Your Name'
+        Description       = 'A brief description of your module'
+        PowerShellVersion = '5.1'
+        PrivateData       = @{ PSData = @{ Prerelease = '' }}
+      }" -Path "TestDrive:\TestModule\TestModule.psd1"
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+      
+      $actual = Get-Version -ProjectType Posh -PowerShellModuleName "TestDrive:\TestModule\TestModule.psd1"
+      $actual | Should -Be "2.3.5"
     }
   }
 
@@ -502,6 +1100,131 @@ function Set-Version {
       
       $actual = Get-Content "TestDrive:\CustomModule\version.txt"
       $actual | Should -Be "2.3.4.6"
+    }
+
+    It "Should add suffix to version" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "-custom"
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.5.5-custom"
+    }
+
+    It "Should keep existing suffix" {
+      "2.3.4.5-existing-suffix" | Out-File "TestDrive:\CustomModule\version.txt" -Force
+
+      Mock -CommandName Invoke-RestMethod -MockWith {
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.5.5-existing-suffix"
+    }
+
+    It "Should increment new suffix" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -Suffix "-rc"
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.4.5-rc.1"
+    }
+
+    It "Should increment existing suffix" {
+      "2.3.4.5-rc.4" | Out-File "TestDrive:\CustomModule\version.txt" -Force
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.4.5-rc.5"
+    }
+
+    It "Should not throw exception if suffix doesn't exist but requested to be incremented" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix-patch"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.5.5"
+    }
+
+    It "Should remove suffix" {
+      "2.3.4.5-rc.4" | Out-File "TestDrive:\CustomModule\version.txt" -Force
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.5.5"
+    }
+
+    It "Should not throw exception if suffix doesn't exist but requested to be removed" {
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "bug"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath -RemoveSuffix
+      
+      $actual = Get-Content "TestDrive:\CustomModule\version.txt"
+      $actual | Should -Be "2.3.5.5"
     }
   }
 }
