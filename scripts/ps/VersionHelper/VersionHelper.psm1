@@ -428,7 +428,7 @@ function Set-IncrementedVersion {
     $newMinor = [int]$Matches["minor"]
     $newPatch = $(if ($Matches["patch"]) { [int]$Matches["patch"] })
     $newRevision = $(if ($Matches["revision"]) { [int]$Matches["revision"] })
-    $newSuffix = $Matches["suffix"]
+    $newSuffix = $currentSuffix = $Matches["suffix"]
 
     if ($IncrementMajor.IsPresent -and $null -ne $newMajor) {
       $newMajor++
@@ -534,7 +534,7 @@ function Set-IncrementedVersion {
         }
 
         Write-Host "Running custom logic to set version"
-        Set-xVersion -OldVersion $currentVersion -NewVersion $newVersion
+        Set-xVersion -OldVersion $currentVersion -NewVersion $newVersion -OldSuffix $currentSuffix -NewSuffix $newSuffix
       }
   
       Default {

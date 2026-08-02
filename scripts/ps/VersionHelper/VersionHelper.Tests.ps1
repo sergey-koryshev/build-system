@@ -1012,7 +1012,9 @@ function Get-Version {
 function Set-Version {
   param (
     `$OldVersion,
-    `$NewVersion
+    `$NewVersion,
+    `$OldSuffix,
+    `$NewSuffix
   )
   
   `$NewVersion | Out-File "TestDrive:\CustomModule\version.txt" -Force
@@ -1225,6 +1227,32 @@ function Set-Version {
       
       $actual = Get-Content "TestDrive:\CustomModule\version.txt"
       $actual | Should -Be "2.3.5.5"
+    }
+
+    It "Should invoke Set-xVersion with correct parameters"  {
+      "2.3.4.5-rc.4" | Out-File "TestDrive:\CustomModule\version.txt" -Force
+
+      Import-Module "TestDrive:\CustomModule\CustomModule.psm1" -Force -Prefix "x" -Scope Global
+
+      Mock -CommandName Invoke-RestMethod -MockWith { 
+        @(
+          @{
+            name = "suffix-patch"
+          }
+        )
+      } -ParameterFilter {
+        $Uri -eq ("https://api.github.com/repos/{0}/{1}/issues/{2}/labels" -f $fakeOwner, $fakeRepository, $fakePRNumber)
+      } -ModuleName VersionHelper
+
+      Mock -CommandName Set-xVersion -MockWith {
+        $NewVersion | Out-File "TestDrive:\CustomModule\version.txt" -Force
+      } -Verifiable -ParameterFilter {
+        $OldVersion -eq "2.3.4.5-rc.4" -and $OldSuffix -eq "-rc.4" -and $NewVersion -eq "2.3.5.5-rc.5" -and $NewSuffix -eq "-rc.5"
+      } -ModuleName VersionHelper
+  
+      Submit-NewVersionLabel -ProjectType Custom -CustomPowershellModulePath "TestDrive:\CustomModule\CustomModule.psm1" -SHA $fakeSHA -Owner $fakeOwner -Repository $fakeRepository -VersionConfigurationPath $versionConfigPath
+      
+      Assert-VerifiableMock
     }
   }
 }
