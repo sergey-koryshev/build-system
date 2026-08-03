@@ -27,7 +27,7 @@ v1.0.1
 
 **Input Parameters:**
 
-- **REPO_TOKEN** - (secret) token with write permissions to repository;
+- **DEPLOY_KEY** - (secret) deploy key with write permissions to repository;
 - **app-name** - project name;
 - **project-type** - project type: Node, Posh, Custom;
 - **version-configuration-path** - full path to version configuration.
@@ -61,7 +61,13 @@ function Set-Version {
     $OldVersion,
 
     [string]
-    $NewVersion
+    $OldSuffix,
+
+    [string]
+    $NewVersion,
+
+    [string]
+    $NewSuffix,
   )
   
   process {
